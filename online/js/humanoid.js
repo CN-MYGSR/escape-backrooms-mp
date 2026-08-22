@@ -1,14 +1,14 @@
 /* ============ 联机版 影者（AI 怪物）============
  * 双模式：
- *  - 房主：updateHost() 跑完整 AI（寻路/追击/感知），攻击通过 onHit 回调
- *    （由房主广播 hit 事件，不直接改目标客户端的本地状态）。
+ *  - 房主：updateHost() 跑完整 AI（永续追击：始终向最近人类寻路逼近，无游荡），
+ *    攻击通过 onHit 回调（由房主广播 hit 事件，不直接改目标客户端的本地状态）。
  *  - 客户端：applyNet() 接收房主快照位置，updateRemote() 只做动画。
  * 低理智幻觉体：只调用 updateRemote（无 AI、不移动、不伤害）。
  */
 (function () {
   const { clamp, damp, dist2D } = U;
 
-  const ST = { PATROL: 0, INVESTIGATE: 1, CHASE: 2, LINGER: 3 };
+  const ST = { CHASE: 2, INVESTIGATE: 1 }; // 全速追击 / 巡航追踪（均持续寻路）
 
   class Humanoid {
     constructor(scene, world) {
@@ -18,14 +18,12 @@
       this.yaw = 0;
       this.path = null; this.wp = 0;
       this.repathT = 0;
-      this.idleT = 0;
       this.attackCd = 0; this.attackAnim = 0;
       this.stepPhase = 0;
       this.dormant = 0;
-      this.senseT = 16 + Math.random() * 14;
       this.speedBonus = 0;
-      this.lastSeen = null;
       this.chaseLostT = 0;
+      this.curSpeed = 0;      // 当前实际移动速度（广播给客户端做动画）
       this.onHit = null;      // 房主：攻击回调（target, dmg, knockback）
       this.isHallucination = false;
       this._buildMesh(scene);
@@ -72,12 +70,13 @@
 
     reset(x, z) {
       this.pos.set(x, 0, z);
-      this.state = ST.PATROL;
+      this.state = ST.CHASE;
       this.path = null;
       this.dormant = 6;
       this.speedBonus = 0;
       this.attackCd = 0;
-      this.senseT = 16 + Math.random() * 14;
+      this.chaseLostT = 99;   // 开局先按巡航速逼近，目视确认后再全速
+      this.curSpeed = 0;
       this.group.visible = true;
     }
 
@@ -101,85 +100,61 @@
       return this.world.los(this.pos.x, 1.9, this.pos.z, player.pos.x, player.pos.y, player.pos.z);
     }
 
-    /** 房主演算：target 为「最近人类」的玩家代理 {pos, cx, cy, sprinting, id} */
+    /** 房主演算：target 为「最近人类」的玩家代理 {pos, cx, cy, sprinting, id}
+     *  永续追击：任何时刻都向玩家所在格持续寻路，永不游荡；
+     *  近 8 秒内目视/听到 → 全速（5.1+加成），长期脱离接触 → 巡航速（4.2）继续逼近。 */
     updateHost(dt, target, t) {
       const d = dist2D(this.pos.x, this.pos.z, target.pos.x, target.pos.z);
       this.attackCd = Math.max(0, this.attackCd - dt);
       this.dormant = Math.max(0, this.dormant - dt);
-      if (this.dormant > 0) { this._animate(dt, 0, t); return; }
+      if (this.dormant > 0) { this.curSpeed = 0; this._animate(dt, 0, t); return; }
 
       const sees = this.canSee(target, 30);
       const hears = target.sprinting && d < 20;
-
-      if (sees) {
+      if (sees || hears) {
         if (this.state !== ST.CHASE) {
           this.state = ST.CHASE;
           SFX.buzzFlicker();
         }
-        this.lastSeen = { x: target.pos.x, z: target.pos.z };
         this.chaseLostT = 0;
-      } else if (this.state === ST.CHASE) {
-        this.chaseLostT += dt;
-        if (this.chaseLostT > 4) {
-          this.state = ST.INVESTIGATE;
-          if (this.lastSeen)
-            this.setPathTo(this.world.toCX(this.lastSeen.x), this.world.toCY(this.lastSeen.z));
-        }
-      } else if (hears && this.state === ST.PATROL) {
-        this.state = ST.INVESTIGATE;
-        this.setPathTo(target.cx, target.cy);
-      }
-
-      this.senseT -= dt;
-      if (this.senseT <= 0) {
-        this.senseT = 16 + Math.random() * 14;
-        if (this.state === ST.PATROL || this.state === ST.LINGER) {
-          this.state = ST.INVESTIGATE;
-          this.setPathTo(target.cx, target.cy);
-        }
-      }
-
-      let speed = 0;
-      this.repathT -= dt;
-      if (this.state === ST.CHASE) {
-        speed = 5.1 + this.speedBonus;
-        if (sees && d < 11) {
-          this._steer(dt, target.pos.x, target.pos.z, speed);
-          this.path = null;
-        } else {
-          if (this.repathT <= 0 || !this.path) {
-            this.setPathTo(target.cx, target.cy);
-            this.repathT = 0.45;
-          }
-          speed = this._follow(dt, speed);
-        }
-        // 攻击：通知房主（由房主发 hit 事件给目标客户端）
-        if (d < 1.3 && this.attackCd <= 0 &&
-            this.world.los(this.pos.x, 1.9, this.pos.z, target.pos.x, target.pos.y, target.pos.z)) {
-          this.attackCd = 1.7;
-          this.attackAnim = 0.4;
-          if (this.onHit) this.onHit(target.id, 34, this.pos.x, this.pos.z);
-        }
-      } else if (this.state === ST.INVESTIGATE) {
-        speed = this._follow(dt, 2.6 + this.speedBonus * 0.5) || 2.6;
-        if (!this.path || this._pathDone()) { this.state = ST.LINGER; this.idleT = 2.6; }
-      } else if (this.state === ST.LINGER) {
-        this.idleT -= dt;
-        if (this.idleT <= 0) this.state = ST.PATROL;
       } else {
-        if (!this.path || this._pathDone()) {
-          if (this.idleT <= 0) {
-            const r = this.world.roomNear(target.cx, target.cy, 3, 12);
-            this.setPathTo(r.cx, r.cy);
-            this.idleT = 1 + Math.random() * 2;
-          }
-          this.idleT -= dt;
+        this.chaseLostT += dt;
+        this.state = ST.INVESTIGATE; // 巡航追踪档：仍持续向玩家寻路
+      }
+
+      const hot = this.chaseLostT < 8;
+      const speed = (hot ? 5.1 : 4.2) + this.speedBonus * (hot ? 1 : 0.5);
+
+      let moved = 0;
+      this.repathT -= dt;
+      if (sees && d < 11) {
+        this._steer(dt, target.pos.x, target.pos.z, speed);
+        this.path = null;
+        moved = speed;
+      } else {
+        if (this.repathT <= 0 || !this.path) {
+          this.setPathTo(target.cx, target.cy);
+          this.repathT = 0.45;
+        }
+        if (!this._pathDone()) {
+          moved = this._follow(dt, speed);
         } else {
-          speed = this._follow(dt, 2.6);
+          // 同格或路径走尽：直接贴向玩家，等下次重寻路纠正
+          this._steer(dt, target.pos.x, target.pos.z, speed);
+          moved = speed;
         }
       }
 
-      this._animate(dt, speed, t);
+      // 攻击：通知房主（由房主发 hit 事件给目标客户端）
+      if (d < 1.3 && this.attackCd <= 0 &&
+          this.world.los(this.pos.x, 1.9, this.pos.z, target.pos.x, target.pos.y, target.pos.z)) {
+        this.attackCd = 1.7;
+        this.attackAnim = 0.4;
+        if (this.onHit) this.onHit(target.id, 34, this.pos.x, this.pos.z);
+      }
+
+      this.curSpeed = moved;
+      this._animate(dt, moved, t);
     }
 
     /** 客户端：应用房主快照（x,z,yaw,state 速度近似）后只做动画 */

@@ -329,10 +329,14 @@
         av.update(dt, Game.player.pos);
       }
     });
-    const hSt = Game.bufH.at(rt);
-    if (hSt) { Game.humanoid.applyNet(hSt.x, hSt.z, hSt.yaw, hSt.spd); }
-    const sSt = Game.bufS.at(rt);
-    if (sSt) { Game.smiler.applyNet(sSt.x, sSt.z); }
+    // 房主/单机：pos 即权威演算结果，不能再被 120ms 前的插值快照回写
+    // （否则每帧被拽回过去，实际移速跌到约 1/7）
+    if (!(isHost() || Game.solo)) {
+      const hSt = Game.bufH.at(rt);
+      if (hSt) { Game.humanoid.applyNet(hSt.x, hSt.z, hSt.yaw, hSt.spd); }
+      const sSt = Game.bufS.at(rt);
+      if (sSt) { Game.smiler.applyNet(sSt.x, sSt.z); }
+    }
     if (!(isHost() || Game.solo)) {
       Game.humanoid.updateRemote(dt, t);
       Game.smiler.updateRemote(dt, Game.gl.camera);
@@ -402,7 +406,7 @@
       Game.smiler.updateHost(dt, target, Game.gl.camera, t);
       // 房主把 AI 状态写进自己的缓冲（统一插值路径）
       Game.bufH.push(tNow, Game.humanoid.pos.x, Game.humanoid.pos.z, Game.humanoid.yaw,
-        target ? 5.1 : 0);
+        Game.humanoid.curSpeed || 0);
       Game.bufS.push(tNow, Game.smiler.pos.x, Game.smiler.pos.z, 0, 0);
     }
 
@@ -420,7 +424,7 @@
       Net.sendRT({
         t: 'snap', ps,
         h: [+Game.humanoid.pos.x.toFixed(2), +Game.humanoid.pos.z.toFixed(2),
-            +Game.humanoid.yaw.toFixed(3), Game.humanoid.state],
+            +Game.humanoid.yaw.toFixed(3), +(Game.humanoid.curSpeed || 0).toFixed(1)],
         s: [+Game.smiler.pos.x.toFixed(2), +Game.smiler.pos.z.toFixed(2)],
       });
     }
@@ -512,7 +516,7 @@
             const r = Game.roster[i];
             if (r) r.shadow = !!sh;
           }
-          if (msg.h) Game.bufH.push(now, msg.h[0], msg.h[1], msg.h[2], msg.h[3] === 2 ? 5.1 : 2);
+          if (msg.h) Game.bufH.push(now, msg.h[0], msg.h[1], msg.h[2], msg.h[3] || 0);
           if (msg.s) Game.bufS.push(now, msg.s[0], msg.s[1], 0, 0);
         }
         break;
