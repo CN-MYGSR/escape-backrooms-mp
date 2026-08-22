@@ -203,6 +203,7 @@
     UI.setObjective('准备…');
     UI.setBottles(0, Game.world.bottleTotal);
     UI.setSan(100);
+    UI.setBattery(100);
     UI.setShadowMode(false);
     UI.setDarkness(0);
     console.log(`[对局开始] seed=${seed} 玩家=${roster.length} 我=房主:${isHost() || Game.solo}`);
@@ -281,7 +282,13 @@
         W.bottles.forEach((b, idx) => {
           if (!b.taken && dist2D(P.pos.x, P.pos.z, b.x, b.z) < 0.95) {
             Game._pickT = 0.4;
-            sendEvent({ t: 'pickup', idx });
+            sendEvent({ t: 'pickup', idx, k: 0 });
+          }
+        });
+        W.batteries.forEach((b, idx) => {
+          if (!b.taken && dist2D(P.pos.x, P.pos.z, b.x, b.z) < 0.95) {
+            Game._pickT = 0.4;
+            sendEvent({ t: 'pickup', idx, k: 1 });
           }
         });
       }
@@ -360,6 +367,7 @@
     UI.setStamina(P.stamina, P.exhausted);
     UI.setHealth(P.health);
     UI.setSan(Game.san);
+    UI.setBattery(P.isShadow ? 100 : P.battery);
     UI.setTimer(t);
     UI.setObjective(iAmShadow
       ? `猎杀剩余人类（${Game.roster.filter((r) => !r.shadow).length} 人）`
@@ -584,25 +592,34 @@
         }
         break;
       }
-      case 'pickup': { // 房主校验
+      case 'pickup': { // 房主校验（k: 0=杏仁水 1=电池）
         if (!(isHost() || Game.solo)) break;
-        const b = Game.world && Game.world.bottles[msg.idx];
-        const posOk = Game.solo || _distToBottle(fromId, msg.idx) < 2.4;
-        if (b && !b.taken && posOk) broadcast({ t: 'picked', idx: msg.idx, id: fromId });
+        const arr = msg.k === 1 ? Game.world && Game.world.batteries : Game.world && Game.world.bottles;
+        const b = arr && arr[msg.idx];
+        const p = _latestPos(fromId);
+        const posOk = Game.solo || (p && b && dist2D(p.x, p.z, b.x, b.z) < 2.4);
+        if (b && !b.taken && posOk) broadcast({ t: 'picked', idx: msg.idx, k: msg.k || 0, id: fromId });
         break;
       }
       case 'picked': {
-        const b = Game.world && Game.world.bottles[msg.idx];
+        const arr = msg.k === 1 ? Game.world && Game.world.batteries : Game.world && Game.world.bottles;
+        const b = arr && arr[msg.idx];
         if (b && !b.taken) {
           b.taken = true; b.g.visible = false;
           if (msg.id === myId()) {
-            Game.bottles++;
-            Game.player.stamina = Math.min(100, Game.player.stamina + 45);
-            Game.player.health = Math.min(100, Game.player.health + 25);
-            Game.san = Math.min(100, Game.san + 40);
-            SFX.pickup();
-            UI.setBottles(Game.bottles, Game.world.bottleTotal);
-            UI.msg('杏仁水：理智 +40，体力与生命恢复。', null, 2600);
+            if (msg.k === 1) {
+              Game.player.battery = Math.min(100, Game.player.battery + 50);
+              SFX.pickup();
+              UI.msg('电池：手电电量 +50。', null, 2400);
+            } else {
+              Game.bottles++;
+              Game.player.stamina = Math.min(100, Game.player.stamina + 45);
+              Game.player.health = Math.min(100, Game.player.health + 25);
+              Game.san = Math.min(100, Game.san + 40);
+              SFX.pickup();
+              UI.setBottles(Game.bottles, Game.world.bottleTotal);
+              UI.msg('杏仁水：理智 +40，体力与生命恢复。', null, 2600);
+            }
           }
         }
         break;
@@ -632,13 +649,6 @@
     if (!pa || !pb) return Infinity;
     return dist2D(pa.x, pa.z, pb.x, pb.z);
   }
-  function _distToBottle(id, idx) {
-    const p = _latestPos(id);
-    const b = Game.world && Game.world.bottles[idx];
-    if (!p || !b) return Infinity;
-    return dist2D(p.x, p.z, b.x, b.z);
-  }
-
   // ---------- 跳脸惊吓（被怪物杀死时；胆小模式关闭） ----------
   Game._jumpscare = function (kind) {
     if (Game.settings.timid) return;

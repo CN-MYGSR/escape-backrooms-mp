@@ -20,6 +20,11 @@
     f.style.width = Math.max(0, v) + '%';
     f.classList.toggle('low', v <= 25);
   };
+  UI.setBattery = (v) => {
+    const f = $('batteryFill');
+    f.style.width = Math.max(0, v) + '%';
+    f.classList.toggle('low', v <= 25);
+  };
   UI.setBottles = (n, total) => { $('bottleCount').textContent = `杏仁水 ${n}/${total}`; };
   UI.setTimer = (sec) => {
     const m = String(Math.floor(sec / 60)).padStart(2, '0');
