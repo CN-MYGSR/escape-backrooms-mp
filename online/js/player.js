@@ -32,6 +32,7 @@
       camera.position.set(0, 0, 0);
 
       this.flashOn = true;
+      this.battery = 100;          // 手电电量：开启时 1/秒，捡电池 +50；影者夜视不耗电
       this.flashlight = new THREE.SpotLight(0xffedc0, 2.6, 34, 0.46, 0.42, 1.4);
       this.flashlight.castShadow = false;
       this.flashlight.shadow.mapSize.set(1024, 1024);
@@ -70,7 +71,14 @@
       const canvas = document.getElementById('c');
       if (canvas.requestPointerLock) canvas.requestPointerLock();
     }
-    toggleFlash() { this.flashOn = !this.flashOn; SFX.click(); }
+    toggleFlash() {
+      if (!this.flashOn && this.battery <= 0 && !this.isShadow) {
+        UI.msg('手电筒没电了，找找电池。', 'warn', 2400);
+        SFX.click();
+        return;
+      }
+      this.flashOn = !this.flashOn; SFX.click();
+    }
 
     get pos() { return this.holder.position; }
     get cx() { return this.world.toCX(this.pos.x); }
@@ -89,6 +97,7 @@
       this.vel.set(0, 0, 0); this.kb.set(0, 0, 0);
       this.yaw = 0; this.pitch = 0;
       this.stamina = 100; this.health = 100;
+      this.battery = 100;
       this.exhausted = false;
       this.flashOn = true;
       this.isShadow = false;
@@ -100,6 +109,7 @@
       this.isShadow = true;
       this.stamina = 100;
       this.exhausted = false;
+      this.battery = 100; // 夜视不耗电，条回满表示可用状态
       this.flashOn = true; // 影者自带夜视，手电保持开
     }
 
@@ -207,13 +217,26 @@
         this.cam.updateProjectionMatrix();
       }
 
-      // 手电筒（影者强制常亮——夜视光源）
+      // 手电筒（影者强制常亮——夜视光源，不耗电）
+      if (this.flashOn && !this.isShadow) {
+        this.battery = Math.max(0, this.battery - dt);
+        if (this.battery <= 0) {
+          this.flashOn = false;
+          UI.msg('手电筒没电了', 'warn', 2600);
+          SFX.click();
+        }
+      }
       const f = this.forward;
       this.flashlight.position.copy(this.pos).addScaledVector(f, 0.25);
       this.flashlight.position.y -= 0.12;
       const aim = this.pos.clone().addScaledVector(f, 14);
       this.flTarget.position.lerp(aim, 1 - Math.exp(-9 * dt));
-      this.flashlight.intensity = this.flashOn ? 2.6 : 0;
+      let flInt = this.flashOn ? 2.6 : 0;
+      // 低电量闪烁（影者夜视不受影响）
+      if (flInt > 0 && !this.isShadow && this.battery < 25) {
+        if (Math.random() < (25 - this.battery) / 25 * 0.35) flInt *= 0.15 + Math.random() * 0.3;
+      }
+      this.flashlight.intensity = flInt;
       this.glow.position.copy(this.pos);
     }
   }

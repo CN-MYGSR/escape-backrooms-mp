@@ -19,6 +19,7 @@
 
       this.panelPos = [];
       this.bottles = [];
+      this.batteries = [];
       this.exit = null;
       this._lightT = 0;
       this._flicker = { idx: -1, t: 0 };
@@ -29,6 +30,7 @@
       this._buildLights();
       this._buildExit();
       this._buildBottles();
+      this._buildBatteries();
     }
 
     toCX(wx) { return clamp(Math.floor((wx - this.offX) / this.CELL), 0, this.maze.W - 1); }
@@ -221,6 +223,41 @@
         placed++;
       }
       this.bottleTotal = this.bottles.length;
+      this._propUsed = used; // 电池道具复用同一占位集合，避免与杏仁水重叠
+    }
+
+    _buildBatteries() {
+      const R = this._propRng;
+      const rooms = this.maze.rooms.filter((r) => !r.spawn && !r.isExit);
+      const used = this._propUsed;
+      const bodyGeo = new THREE.CylinderGeometry(0.072, 0.072, 0.24, 10);
+      const nubGeo = new THREE.CylinderGeometry(0.026, 0.026, 0.045, 8);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xd8a01e, roughness: 0.4,
+        emissive: 0x6a4a10, emissiveIntensity: 0.75,
+      });
+      const nubMat = new THREE.MeshStandardMaterial({ color: 0xc8c8d0, roughness: 0.3, metalness: 0.7 });
+      let placed = 0, guard = 0;
+      while (placed < Math.min(4, rooms.length) && guard++ < 300) {
+        const r = rooms[Math.floor(R.next() * rooms.length)];
+        const span = (r.x1 - r.x0) >> 1;
+        const x = r.x0 + 2 * Math.floor(R.next() * (span + 1));
+        const y = r.y0 + 2 * Math.floor(R.next() * (((r.y1 - r.y0) >> 1) + 1));
+        if (this.maze.grid[y][x] !== MZ.OPEN) continue;
+        const key = x + ',' + y;
+        if (used.has(key)) continue;
+        used.add(key);
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        const nub = new THREE.Mesh(nubGeo, nubMat);
+        nub.position.y = 0.14;
+        g.add(body); g.add(nub);
+        g.position.set(this.toWX(x), 0.5, this.toWZ(y));
+        this.group.add(g);
+        this.batteries.push({ g, x: g.position.x, z: g.position.z, taken: false, ph: R.next() * 6 });
+        placed++;
+      }
+      this.batteryTotal = this.batteries.length;
     }
 
     randomRoom(avoidCx, avoidCy) {
@@ -307,6 +344,11 @@
         if (b.taken) continue;
         b.g.position.y = 0.55 + Math.sin(t * 2 + b.ph) * 0.08;
         b.g.rotation.y = t * 1.2 + b.ph;
+      }
+      for (const b of this.batteries) {
+        if (b.taken) continue;
+        b.g.position.y = 0.55 + Math.sin(t * 2 + b.ph) * 0.08;
+        b.g.rotation.y = -t * 1.4 + b.ph;
       }
       if (this.exit) this.exit.glow.intensity = 0.75 + Math.sin(t * 2.4) * 0.25;
     }

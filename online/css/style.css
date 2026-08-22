@@ -50,6 +50,8 @@ html, body {
 #healthFill { background: linear-gradient(90deg, #7a2a22, #c0392b); }
 #sanFill { background: linear-gradient(90deg, #3a5a8a, #7ab0d8); }
 #sanFill.low { background: linear-gradient(90deg, #5a2a6a, #a04a8a); }
+#batteryFill { background: linear-gradient(90deg, #8a6a1f, #ffd24a); }
+#batteryFill.low { background: linear-gradient(90deg, #8a3a1f, #ff8a4a); }
 
 #status { position: absolute; right: 24px; bottom: 24px;
   display: flex; gap: 18px; font-size: 14px; color: #c5b878; text-shadow: 0 1px 3px #000; }
