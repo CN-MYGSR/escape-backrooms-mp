@@ -238,6 +238,37 @@
     o.start(t); o.stop(t + 0.45);
   };
 
+  SFX.jumpscare = function () { // 被怪物杀死时的跳脸
+    if (!SFX.ctx) return;
+    const c = SFX.ctx, t = c.currentTime;
+    // 低频轰鸣
+    const o = c.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(30, t + 0.7);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.55, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+    o.connect(g); g.connect(SFX.master); o.start(t); o.stop(t + 0.85);
+    // 噪声爆裂
+    const s = noiseSrc();
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 0.8;
+    const g2 = c.createGain();
+    g2.gain.setValueAtTime(0.5, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    s.connect(bp); bp.connect(g2); g2.connect(SFX.master);
+    s.start(t); s.stop(t + 0.55);
+    // 尖啸下滑
+    const o2 = c.createOscillator(); o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(1600, t);
+    o2.frequency.exponentialRampToValueAtTime(220, t + 0.6);
+    const g3 = c.createGain();
+    g3.gain.setValueAtTime(0.28, t);
+    g3.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+    o2.connect(g3); g3.connect(SFX.master);
+    o2.start(t); o2.stop(t + 0.7);
+  };
+
   SFX.death = function () {
     if (!SFX.ctx) return;
     const c = SFX.ctx, t = c.currentTime;
