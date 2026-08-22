@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后室：环形回廊 — Escape the Backrooms</title>
+<link rel="stylesheet" href="css/style.css?v=9">
+</head>
+<body>
+<div id="game">
+  <canvas id="c"></canvas>
+
+  <!-- 全屏氛围遮罩 -->
+  <div id="vignette"></div>
+  <div id="darkness"></div>
+  <div id="damage"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+
+    <div id="bars">
+      <div class="bar"><span class="label">体力</span><div class="track"><div id="staminaFill" class="fill"></div></div></div>
+      <div class="bar"><span class="label">生命</span><div class="track"><div id="healthFill" class="fill"></div></div></div>
+      <div class="bar"><span class="label">理智</span><div class="track"><div id="sanFill" class="fill"></div></div></div>
+    </div>
+
+    <div id="status">
+      <span id="bottleCount">杏仁水 0/6</span>
+      <span id="timer">00:00</span>
+    </div>
+
+    <div id="objective">寻找出口</div>
+    <div id="messages"></div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="screen-start" class="screen active">
+    <div class="panel">
+      <h1>后室 <span class="en">BACKROOMS</span></h1>
+      <p class="sub">环形回廊 · LEVEL 0-B</p>
+      <p class="desc">你不小心穿过了现实的缝隙。潮湿的地毯、嗡鸣的荧光灯、
+        由 <b>BSP 二叉空间分割</b> 生长出的房间群，以及刻意凿开的<b>环形回路</b>——
+        它们没有尽头，但有出口。</p>
+
+      <div class="monsters">
+        <div class="mcard">
+          <div class="mtitle">影者 <small>仿人类黑色实体</small></div>
+          <p>两米余高的黑色人形。它在你视野之外徘徊，一旦被看见就会追猎——奔跑吧，但别跑太久。</p>
+        </div>
+        <div class="mcard">
+          <div class="mtitle">笑靥 <small>黑色迷雾实体</small></div>
+          <p>一团缓慢漂移的黑雾，正面悬浮着一张发光的笑脸。它能缓慢穿过墙壁，黑暗会喂饱它——用<mark>手电筒</mark>照住它可以逼退它。</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <span><b>WASD</b> 移动</span><span><b>Shift</b> 奔跑</span><span><b>F</b> 手电筒</span>
+        <span><b>Esc</b> 暂停</span>
+      </div>
+
+      <div class="opts">
+        <label><input type="checkbox" id="optShadows" checked> 阴影（性能较弱可关闭）</label>
+        <label><input type="checkbox" id="optFriendly"> 晕 3D 友好模式（关闭视角摇晃与 FOV 拉伸，畸变减半）</label>
+      </div>
+
+      <button id="btnStart" class="btn">进 入 后 室</button>
+      <p class="tip">提示：理智缓慢流逝。杏仁水可恢复理智与体力——但每一瓶都会让它们更快察觉到你。</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="screen-pause" class="screen">
+    <div class="panel small">
+      <h2>暂 停</h2>
+      <p class="desc">荧光灯还在嗡鸣。它们还在等你。</p>
+      <button id="btnResume" class="btn">继 续</button>
+      <button id="btnRestart1" class="btn ghost">重新生成迷宫</button>
+    </div>
+  </div>
+
+  <!-- 死亡 -->
+  <div id="screen-dead" class="screen">
+    <div class="panel small">
+      <h2 class="red">你 被 留 在 了 这 里</h2>
+      <p id="deathReason" class="desc"></p>
+      <p id="deathStats" class="stats"></p>
+      <button id="btnRestart2" class="btn">再 试 一 次</button>
+    </div>
+  </div>
+
+  <!-- 理智归零：化身影者 · 观战模式 -->
+  <div id="screen-spectate" class="spectate-bar" style="display:none">
+    <div class="st-title">理智归零 · 你化作了影者</div>
+    <div class="st-hint">WASD 飞行 · Space / C 升降 · Shift 加速 · 按住鼠标拖动观察</div>
+    <button id="btnRestart4" class="btn small">重 新 开 始</button>
+  </div>
+
+  <!-- 胜利 -->
+  <div id="screen-win" class="screen">
+    <div class="panel small">
+      <h2 class="green">你 逃 出 了 后 室</h2>
+      <p class="desc">门后是刺眼的白光和真实世界的噪音。至少，这一次是。</p>
+      <p id="winStats" class="stats"></p>
+      <button id="btnRestart3" class="btn">再 进 一 次</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/lib/three.min.js?v=9"></script>
+<script src="js/utils.js?v=9"></script>
+<script src="js/textures.js?v=9"></script>
+<script src="js/maze.js?v=9"></script>
+<script src="js/audio.js?v=9"></script>
+<script src="js/ui.js?v=9"></script>
+<script src="js/player.js?v=9"></script>
+<script src="js/humanoid.js?v=9"></script>
+<script src="js/smiler.js?v=9"></script>
+<script src="js/world.js?v=9"></script>
+<script src="js/main.js?v=9"></script>
+</body>
+</html>

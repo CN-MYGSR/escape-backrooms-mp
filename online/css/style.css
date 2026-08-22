@@ -1,0 +1,159 @@
+/* 后室联机版 —— 界面样式 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --yellow: #c9b458;
+  --yellow-dim: #8a7c3e;
+  --bg: #0d0b07;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  /* 非拉丁文本必须随作品打包字体（规范要求），系统字体仅作兜底 */
+  font-family: "BackroomsZH", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  color: #d8cfa8;
+  user-select: none;
+}
+
+#game { position: fixed; inset: 0; }
+#c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+#vignette { position: absolute; inset: 0; pointer-events: none; z-index: 5;
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,0.55) 100%); }
+#darkness { position: absolute; inset: 0; pointer-events: none; z-index: 6;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.96) 90%);
+  opacity: 0; transition: opacity 0.25s; }
+#damage { position: absolute; inset: 0; pointer-events: none; z-index: 7;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(160,10,0,0.55) 100%);
+  opacity: 0; }
+
+/* ---------- HUD ---------- */
+#hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+#hud.hidden, .hidden { display: none !important; }
+
+#crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(230,220,180,0.8); border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+
+#bars { position: absolute; left: 24px; bottom: 24px; width: 240px;
+  display: flex; flex-direction: column; gap: 8px; }
+.bar { display: flex; align-items: center; gap: 10px; }
+.bar .label { width: 34px; font-size: 13px; letter-spacing: 2px; color: #b7ab7a; text-shadow: 0 1px 2px #000; }
+.bar .track { flex: 1; height: 10px; background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(201,180,88,0.35); border-radius: 4px; overflow: hidden; }
+.bar .fill { height: 100%; width: 100%; border-radius: 3px; transition: width 0.15s linear; }
+#staminaFill { background: linear-gradient(90deg, #a8933f, #e0cd6e); }
+#staminaFill.low { background: linear-gradient(90deg, #8a4a2a, #cf7a3a); }
+#healthFill { background: linear-gradient(90deg, #7a2a22, #c0392b); }
+#sanFill { background: linear-gradient(90deg, #3a5a8a, #7ab0d8); }
+#sanFill.low { background: linear-gradient(90deg, #5a2a6a, #a04a8a); }
+
+#status { position: absolute; right: 24px; bottom: 24px;
+  display: flex; gap: 18px; font-size: 14px; color: #c5b878; text-shadow: 0 1px 3px #000; }
+#bottleCount { color: #9fd8e8; }
+#netState { color: #8fa87a; }
+
+#objective { position: absolute; left: 24px; top: 20px;
+  font-size: 14px; letter-spacing: 3px; color: rgba(220,205,150,0.85); text-shadow: 0 1px 3px #000; }
+#objective::before { content: "◆ "; color: var(--yellow); }
+
+#aliveList { position: absolute; right: 20px; top: 20px; text-align: right;
+  font-size: 13px; color: #b7ab7a; text-shadow: 0 1px 3px #000; line-height: 1.9; }
+#aliveList .sh { color: #9a7aa8; }
+#aliveList .hu { color: #c9b458; }
+#aliveList .me::after { content: "（你）"; color: #7a7050; font-size: 11px; }
+
+#messages { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: 80%; text-align: center; }
+.msg { font-size: 15px; color: #ded39a; text-shadow: 0 1px 4px #000, 0 0 12px rgba(0,0,0,0.9);
+  opacity: 1; transition: opacity 0.6s; }
+.msg.warn { color: #e8896a; }
+.msg.danger { color: #ff5544; font-weight: bold; }
+
+/* ---------- 登录条 ---------- */
+#authbar { position: absolute; top: 12px; right: 14px; z-index: 30;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: #b7ab7a; text-shadow: 0 1px 3px #000; }
+.mini { padding: 4px 12px; font-size: 12px; letter-spacing: 1px; color: #141007;
+  background: linear-gradient(180deg, #d8c46a, #a8933f); border: none; border-radius: 4px;
+  cursor: pointer; font-family: inherit; }
+.mini:hover { filter: brightness(1.1); }
+
+/* ---------- 全屏界面 ---------- */
+.screen { position: absolute; inset: 0; z-index: 20;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(5,4,2,0.88); backdrop-filter: blur(3px); overflow-y: auto; }
+.screen.active { display: flex; }
+
+.panel { width: min(760px, 94vw); padding: 34px 44px;
+  background: linear-gradient(160deg, rgba(28,24,12,0.96), rgba(14,12,6,0.96));
+  border: 1px solid rgba(201,180,88,0.35); border-radius: 10px;
+  box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 0 80px rgba(0,0,0,0.4);
+  text-align: center; }
+.panel.small { width: min(480px, 94vw); }
+
+h1 { font-size: 40px; letter-spacing: 12px; color: #e8d98a;
+  text-shadow: 0 0 24px rgba(201,180,88,0.35), 0 2px 0 #000; margin-bottom: 6px; }
+h1 .en { font-size: 15px; letter-spacing: 5px; color: var(--yellow-dim); vertical-align: middle; }
+h2 { font-size: 26px; letter-spacing: 8px; margin-bottom: 12px; color: #e8d98a; }
+h3 { font-size: 15px; letter-spacing: 3px; color: #c9b458; margin: 14px 0 10px; text-align: left; }
+
+.sub { color: var(--yellow-dim); letter-spacing: 4px; margin-bottom: 14px; font-size: 13px; }
+.desc { font-size: 13.5px; line-height: 1.9; color: #b3a880; margin-bottom: 16px; }
+.desc b { color: #e0d090; }
+.stats { font-size: 14px; color: #9a9070; margin-bottom: 16px; line-height: 1.9; }
+.dim { color: #6e654a; font-size: 12.5px; }
+.code { color: #9fd8e8; letter-spacing: 4px; font-size: 18px; }
+
+/* ---------- 大厅 ---------- */
+.lobby-grid { display: flex; gap: 22px; text-align: left; margin-bottom: 14px; }
+.lcol { flex: 1; }
+.row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #9a9070; }
+.row label { width: 66px; flex: none; }
+.row input, .row select {
+  flex: 1; padding: 6px 10px; background: rgba(0,0,0,0.4); color: #d8cfa8;
+  border: 1px solid rgba(201,180,88,0.3); border-radius: 4px; font-family: inherit; font-size: 13px; }
+.roomlist { min-height: 130px; max-height: 190px; overflow-y: auto; margin-bottom: 10px;
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(201,180,88,0.2); border-radius: 6px; padding: 8px; }
+.rline { display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 10px; margin-bottom: 4px; font-size: 13px;
+  background: rgba(40,34,16,0.5); border-radius: 4px; }
+.rline .rjoin { padding: 3px 12px; font-size: 12px; }
+.plist { margin: 10px 0 16px; }
+.pline { display: flex; justify-content: space-between; padding: 8px 12px; margin-bottom: 4px;
+  background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 14px; }
+.pline .rdy { color: #6ee7a0; }
+.pline .wt { color: #6e654a; }
+
+.btn { display: inline-block; padding: 11px 40px;
+  font-size: 16px; letter-spacing: 5px; color: #141007;
+  background: linear-gradient(180deg, #d8c46a, #a8933f);
+  border: none; border-radius: 6px; cursor: pointer;
+  box-shadow: 0 4px 18px rgba(201,180,88,0.25); transition: transform 0.1s;
+  font-family: inherit; }
+.btn:hover { transform: translateY(-2px); }
+.btn.wide { width: 100%; padding: 10px; margin-top: 4px; }
+.btn.ghost { background: transparent; color: #b7ab7a; border: 1px solid rgba(201,180,88,0.4); box-shadow: none; }
+.btn.ghost.wide { margin-top: 8px; margin-bottom: 0; }
+
+.opts { font-size: 13px; color: #9a9070; margin: 6px 0 4px; }
+.opts label { cursor: pointer; }
+.tip { margin-top: 12px; font-size: 12px; color: #6e654a; }
+
+@media (max-width: 760px) {
+  .lobby-grid { flex-direction: column; }
+  h1 { font-size: 28px; letter-spacing: 8px; }
+  .panel { padding: 24px 18px; }
+}
+
+/* ---------- 字体（子集化 CJK，随作品打包） ---------- */
+@font-face {
+  font-family: "BackroomsZH";
+  src: url("../assets/font/backrooms-zh.woff2?v=1") format("woff2"),
+       url("../assets/font/backrooms-zh.woff?v=1") format("woff");
+  font-display: swap;
+}
