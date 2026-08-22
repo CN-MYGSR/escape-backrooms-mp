@@ -340,6 +340,19 @@
 
     // ---- 世界/HUD/氛围 ----
     W.update(dt, P.pos, t);
+    // 联网路径指示（SDK 内置诊断：直连/中继/恢复中 + 已连接人数）
+    if (Net.room && !Game.solo) {
+      Game._netUiT = (Game._netUiT || 0) - dt;
+      if (Game._netUiT <= 0) {
+        Game._netUiT = 0.5;
+        try {
+          const ns = Net.room.networkStats();
+          const open = Net.room.peers().filter((p) => p.open).length;
+          const label = { direct: '直连', mixed: '直连+中继', relay: '中继', recovering: '恢复中' }[ns.state] || ns.state;
+          UI.setNet(open > 0 ? `${label} · ${open}人` : '等待连接…', ns.state === 'direct' || ns.state === 'mixed');
+        } catch (_) { /* 诊断不可用时保持上次显示 */ }
+      }
+    }
     UI.setStamina(P.stamina, P.exhausted);
     UI.setHealth(P.health);
     UI.setSan(Game.san);
