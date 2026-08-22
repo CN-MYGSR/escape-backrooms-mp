@@ -172,6 +172,7 @@
 
   $('btnCreate').addEventListener('click', async () => {
     Game.settings.friendly = $('optFriendly').checked;
+    Game.settings.timid = $('optTimid').checked;
     Game.maxPlayers = parseInt($('optMax').value, 10) || 4;
     if (!Net.vibe) { // 离线：直接本地练习
       Game.enterRoom('LOCAL', true);
@@ -190,6 +191,7 @@
 
   async function joinByCode(code) {
     Game.settings.friendly = $('optFriendly').checked;
+    Game.settings.timid = $('optTimid').checked;
     if (!Net.vibe) { UI.msg('离线模式无法加入房间。', 'warn', 3000); return; }
     if (!Net.online) {
       const u = await Net.login();
@@ -202,6 +204,7 @@
 
   $('btnQuick').addEventListener('click', async () => {
     Game.settings.friendly = $('optFriendly').checked;
+    Game.settings.timid = $('optTimid').checked;
     if (!Net.vibe || !Net.online) { UI.msg('快速加入需要登录。', 'warn', 3000); return; }
     const id = await Net.quickJoin();
     if (!id) { UI.msg('没有可加入的房间。', 'warn', 3000); return; }

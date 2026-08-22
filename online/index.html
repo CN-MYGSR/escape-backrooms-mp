@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>后室：环形回廊 联机版 — Escape Together</title>
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <div id="game">
@@ -13,6 +13,9 @@
   <div id="vignette"></div>
   <div id="darkness"></div>
   <div id="damage"></div>
+
+  <!-- 跳脸惊吓（被怪物杀死时；胆小模式关闭） -->
+  <div id="jumpscare" class="hidden"><img id="jumpscareImg" alt=""></div>
 
   <!-- 对局 HUD -->
   <div id="hud" class="hidden">
@@ -68,6 +71,7 @@
 
       <div class="opts">
         <label><input type="checkbox" id="optFriendly"> 晕 3D 友好模式（关闭视角摇晃与 FOV 拉伸，畸变减半）</label>
+        <label><input type="checkbox" id="optTimid"> 心脏病 & 胆小玩家模式（关闭被怪物击杀时的跳脸惊吓）</label>
       </div>
       <p class="tip" id="lobbyTip">未登录也可以创建房间进行本地练习（无联网对手）。</p>
     </div>
@@ -100,19 +104,19 @@
 
 <!-- VibeHub SDK：必须绝对地址（红线），相对路径在 vibeapps 域会 404 -->
 <script src="https://vibe.lumigrav.space/sdk/v3/vibehub.js"></script>
-<script src="js/lib/three.min.js?v=3"></script>
-<script src="js/utils.js?v=3"></script>
-<script src="js/textures.js?v=3"></script>
-<script src="js/maze.js?v=3"></script>
-<script src="js/audio.js?v=3"></script>
-<script src="js/ui.js?v=3"></script>
-<script src="js/net.js?v=3"></script>
-<script src="js/world.js?v=3"></script>
-<script src="js/player.js?v=3"></script>
-<script src="js/humanoid.js?v=3"></script>
-<script src="js/smiler.js?v=3"></script>
-<script src="js/avatars.js?v=3"></script>
-<script src="js/game.js?v=3"></script>
-<script src="js/main.js?v=3"></script>
+<script src="js/lib/three.min.js?v=4"></script>
+<script src="js/utils.js?v=4"></script>
+<script src="js/textures.js?v=4"></script>
+<script src="js/maze.js?v=4"></script>
+<script src="js/audio.js?v=4"></script>
+<script src="js/ui.js?v=4"></script>
+<script src="js/net.js?v=4"></script>
+<script src="js/world.js?v=4"></script>
+<script src="js/player.js?v=4"></script>
+<script src="js/humanoid.js?v=4"></script>
+<script src="js/smiler.js?v=4"></script>
+<script src="js/avatars.js?v=4"></script>
+<script src="js/game.js?v=4"></script>
+<script src="js/main.js?v=4"></script>
 </body>
 </html>

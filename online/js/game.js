@@ -39,7 +39,7 @@
 
   const Game = {
     phase: 'idle',       // idle | room | countdown | playing | ended
-    settings: { friendly: false, shadows: true },
+    settings: { friendly: false, shadows: true, timid: false },
     san: 100, time: 0, bottles: 0,
     roster: [],          // [{id, name, ready, shadow, reason, order, catches}]
     solo: false,         // 本地练习（无房间）
@@ -570,8 +570,13 @@
       }
       case 'hit': {
         if (msg.target === myId()) {
+          const fatal = !Game.player.isShadow && msg.dmg >= Game.player.health;
           Game.player.hurt(msg.dmg, msg.dmg < 5); // 持续伤害(黑雾)静默
           if (msg.kx !== undefined && msg.kx !== null) Game.player.knockback(msg.kx, msg.kz, 9);
+          if (fatal && Game.phase === 'playing') {
+            // 被怪物杀死：跳脸惊吓（有击退坐标=影者，否则=笑靥；胆小模式关闭）
+            Game._jumpscare(msg.kx !== undefined && msg.kx !== null ? 'shadow' : 'smiler');
+          }
         }
         break;
       }
@@ -629,6 +634,43 @@
     if (!p || !b) return Infinity;
     return dist2D(p.x, p.z, b.x, b.z);
   }
+
+  // ---------- 跳脸惊吓（被怪物杀死时；胆小模式关闭） ----------
+  Game._jumpscare = function (kind) {
+    if (Game.settings.timid) return;
+    const ov = document.getElementById('jumpscare');
+    const img = document.getElementById('jumpscareImg');
+    if (!ov || !img) return;
+    if (kind === 'smiler') {
+      // 笑靥：直接复用游戏内的发光笑脸贴图
+      img.src = TEX.smilerFace().image.toDataURL();
+    } else {
+      // 影者：黑暗中的一对冷白细长眼 + 隐约头廓
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const x = c.getContext('2d');
+      x.fillStyle = '#000'; x.fillRect(0, 0, 512, 512);
+      const g = x.createRadialGradient(256, 290, 30, 256, 290, 230);
+      g.addColorStop(0, 'rgba(34,34,40,0.95)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 512, 512);
+      x.shadowColor = '#eef6ff'; x.shadowBlur = 48;
+      x.fillStyle = '#f4fbff';
+      for (const ex of [176, 336]) {
+        x.beginPath();
+        x.ellipse(ex, 252, 26, 48, 0, 0, Math.PI * 2);
+        x.fill();
+      }
+      img.src = c.toDataURL();
+    }
+    // 重置动画（连续触发时重新播放）
+    ov.classList.add('hidden');
+    void ov.offsetWidth;
+    ov.classList.remove('hidden');
+    SFX.jumpscare();
+    clearTimeout(Game._jsT);
+    Game._jsT = setTimeout(() => { ov.classList.add('hidden'); }, 1150);
+  };
 
   // ---------- 低理智幻觉（纯本地视觉）----------
   function _spawnHallucination() {
