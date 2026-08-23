@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后室：环形回廊 联机版 — Escape Together</title>
+<link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+<div id="game">
+  <canvas id="c"></canvas>
+
+  <div id="vignette"></div>
+  <div id="darkness"></div>
+  <div id="damage"></div>
+
+  <!-- 跳脸惊吓（被怪物杀死时；胆小模式关闭） -->
+  <div id="jumpscare" class="hidden"><img id="jumpscareImg" alt=""></div>
+
+  <!-- 对局 HUD -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="bars">
+      <div class="bar"><span class="label">体力</span><div class="track"><div id="staminaFill" class="fill"></div></div></div>
+      <div class="bar"><span class="label">生命</span><div class="track"><div id="healthFill" class="fill"></div></div></div>
+      <div class="bar" id="sanBar"><span class="label">理智</span><div class="track"><div id="sanFill" class="fill"></div></div></div>
+      <div class="bar"><span class="label">手电</span><div class="track"><div id="batteryFill" class="fill"></div></div></div>
+    </div>
+    <div id="status">
+      <span id="bottleCount">杏仁水 0/6</span>
+      <span id="timer">00:00</span>
+      <span id="netState">—</span>
+    </div>
+    <div id="objective">等待开局</div>
+    <div id="aliveList"></div>
+    <div id="messages"></div>
+    <div id="chatLog"></div>
+    <input id="chatInput" class="hidden" maxlength="80" autocomplete="off" placeholder="Enter 发送 · Esc 取消">
+    <div id="slots">
+      <div class="slot"><span class="key">1</span><span class="ico" id="slot0">手电</span></div>
+      <div class="slot empty"><span class="key">2</span><span class="ico" id="slot1">—</span></div>
+      <div class="slot empty"><span class="key">3</span><span class="ico" id="slot2">—</span></div>
+    </div>
+    <!-- 摇杆容器（移动端专用） -->
+<div id="joystick-zone" style="display:none; position:absolute; left:30px; bottom:30px; width:120px; height:120px; z-index:15;"></div>
+  </div>
+
+  <!-- 登录状态条 -->
+  <div id="authbar">
+    <span id="authStatus">正在连接 VibeHub…</span>
+    <button id="btnLogin" class="mini">登录</button>
+    <button id="btnLogout" class="mini hidden">退出</button>
+  </div>
+
+  <!-- 大厅 -->
+  <div id="screen-lobby" class="screen active">
+    <div class="panel">
+      <h1>后室 <span class="en">联机版</span></h1>
+      <p class="sub">环形回廊 · 多人竞速 · 谁先逃出，谁就成为影者</p>
+      <p class="desc">和 2~6 名玩家一起掉进由 <b>BSP 二叉空间分割</b> 生成的迷宫。
+        第一个穿过出口的人将<b>升格为影者</b>，回头猎杀其余玩家；
+        被抓的人也会加入追猎，直到无人类幸存。</p>
+
+      <div class="lobby-grid">
+        <div class="lcol">
+          <h3>创建房间</h3>
+          <div class="row"><label>人数上限</label>
+            <select id="optMax"><option>2</option><option selected>4</option><option>6</option></select></div>
+          <div class="row"><label>密码(可空)</label><input id="optPass" maxlength="12" placeholder="留空为公开房"></div>
+          <button id="btnCreate" class="btn wide">创建并进入</button>
+          <h3>加入房间</h3>
+          <div class="row"><label>房间号</label><input id="optCode" maxlength="8" placeholder="如 A3F7KQ"></div>
+          <button id="btnJoinCode" class="btn ghost wide">按房间号加入</button>
+        </div>
+        <div class="lcol">
+          <h3>公开房间 <button id="btnRefresh" class="mini">刷新</button></h3>
+          <div id="roomList" class="roomlist"><p class="dim">加载中…</p></div>
+          <button id="btnQuick" class="btn ghost wide">快速加入</button>
+        </div>
+      </div>
+
+      <div class="opts">
+        <label><input type="checkbox" id="optFriendly"> 晕 3D 友好模式（关闭视角摇晃与 FOV 拉伸，畸变减半）</label>
+        <label><input type="checkbox" id="optTimid"> 心脏病 & 胆小玩家模式（关闭被怪物击杀时的跳脸惊吓）</label>
+      </div>
+      <p class="tip" id="lobbyTip">未登录也可以创建房间进行本地练习（无联网对手）。</p>
+    </div>
+  </div>
+
+  <!-- 房间等待 -->
+  <div id="screen-room" class="screen">
+    <div class="panel small">
+      <h2>准 备 室</h2>
+      <p class="desc">房间号 <b id="roomCode" class="code"></b>（发给朋友直接加入）</p>
+      <div id="playerList" class="plist"></div>
+      <div>
+        <button id="btnReady" class="btn">我准备好了</button>
+        <button id="btnStartRound" class="btn hidden">开 始 对 局</button>
+      </div>
+      <button id="btnLeave" class="btn ghost" style="margin-top:12px">离开房间</button>
+    </div>
+  </div>
+
+  <!-- 回合结算 -->
+  <div id="screen-result" class="screen">
+    <div class="panel">
+      <h2 id="resultTitle">回 合 结 算</h2>
+      <div id="resultBody" class="stats"></div>
+      <button id="btnAgain" class="btn hidden">再 来 一 局</button>
+      <button id="btnBackLobby" class="btn ghost" style="margin-left:12px">返回准备室</button>
+    </div>
+  </div>
+</div>
+
+<!-- VibeHub SDK：必须绝对地址（红线），相对路径在 vibeapps 域会 404 -->
+<script src="https://vibe.lumigrav.space/sdk/v3/vibehub.js"></script>
+<script src="js/lib/three.min.js?v=8"></script>
+<script src="js/lib/nipplejs.js"></script>
+<script src="js/utils.js?v=8"></script>
+<script src="js/textures.js?v=8"></script>
+<script src="js/maze.js?v=8"></script>
+<script src="js/audio.js?v=8"></script>
+<script src="js/ui.js?v=8"></script>
+<script src="js/net.js?v=8"></script>
+<script src="js/world.js?v=8"></script>
+<script src="js/garage.js?v=8"></script>
+<script src="js/player.js?v=8"></script>
+<script src="js/humanoid.js?v=8"></script>
+<script src="js/smiler.js?v=8"></script>
+<script src="js/avatars.js?v=8"></script>
+<script src="js/game.js?v=8"></script>
+<script src="js/main.js?v=8"></script>
+</body>
+</html>
