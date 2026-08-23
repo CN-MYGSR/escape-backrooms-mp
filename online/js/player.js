@@ -33,6 +33,7 @@
 
       this.flashOn = true;
       this.battery = 100;          // 手电电量：开启时 1/秒，捡电池 +50；影者夜视不耗电
+      this._flickT = 0;            // 闪烁爆发剩余时长
       this.slots = [{ k: 'flash' }, null, null]; // 1=手电（常驻） 2/3=物品槽
       this.selSlot = 0;            // 当前选中槽位（E 使用）
       this.flashlight = new THREE.SpotLight(0xffedc0, 2.6, 34, 0.46, 0.42, 1.4);
@@ -266,9 +267,16 @@
       const aim = this.pos.clone().addScaledVector(f, 14);
       this.flTarget.position.lerp(aim, 1 - Math.exp(-9 * dt));
       let flInt = this.flashOn ? 2.6 : 0;
-      // 低电量闪烁（影者夜视不受影响）
-      if (flInt > 0 && !this.isShadow && this.battery < 25) {
-        if (Math.random() < (25 - this.battery) / 25 * 0.35) flInt *= 0.15 + Math.random() * 0.3;
+      // 闪烁：电量充足(≥40)偶发老化式闪烁；≤25 电量越低越频繁剧烈；影者夜视不受影响
+      if (flInt > 0 && !this.isShadow) {
+        if (this._flickT > 0) {
+          this._flickT -= dt;
+          flInt *= this.battery < 25 ? (0.15 + Math.random() * 0.3) : (0.35 + Math.random() * 0.55);
+        } else if (this.battery < 25) {
+          if (Math.random() < (25 - this.battery) / 25 * 0.35) this._flickT = 0.08 + Math.random() * 0.14;
+        } else if (this.battery >= 40) {
+          if (Math.random() < 0.004) this._flickT = 0.08 + Math.random() * 0.1; // 约 4~6 秒一次
+        }
       }
       this.flashlight.intensity = flInt;
       this.glow.position.copy(this.pos);
