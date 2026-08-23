@@ -43,6 +43,7 @@
     san: 100, time: 0, bottles: 0,
     roster: [],          // [{id, name, ready, shadow, reason, order, catches}]
     solo: false,         // 本地练习（无房间）
+    chatOpen: false,     // 聊天输入中（屏蔽移动/视角/游戏键）
     round: null,
     _flags: {},
     hallucinations: [],
@@ -66,6 +67,14 @@
     if (Game.solo) handleMsg(msg, myId());
     else Net.send(msg);
   }
+
+  // 聊天：可靠消息直发全房间（低频事件，无需房主中继）
+  Game.sendChat = function (text) {
+    text = String(text || '').trim().slice(0, 80);
+    if (!text) return;
+    if (!Game.solo) Net.send({ t: 'chat', text });
+    UI.addChat(Game.myName || '我', text);
+  };
 
   // ---------- 房间与大厅 ----------
   Game.enterRoom = function (roomId, solo) {
@@ -279,18 +288,21 @@
       }
       Game._pickT = (Game._pickT || 0) - dt;
       if (Game._pickT <= 0) {
-        W.bottles.forEach((b, idx) => {
-          if (!b.taken && dist2D(P.pos.x, P.pos.z, b.x, b.z) < 0.95) {
+        const hasSpace = P.slots[1] === null || P.slots[2] === null;
+        const tryPick = (arr, k, label) => {
+          arr.forEach((b, idx) => {
+            if (b.taken || dist2D(P.pos.x, P.pos.z, b.x, b.z) >= 0.95) return;
+            if (!hasSpace) {
+              Game._pickT = 3;
+              UI.msg('物品栏已满，先按 E 用掉一件。', 'warn', 2200);
+              return;
+            }
             Game._pickT = 0.4;
-            sendEvent({ t: 'pickup', idx, k: 0 });
-          }
-        });
-        W.batteries.forEach((b, idx) => {
-          if (!b.taken && dist2D(P.pos.x, P.pos.z, b.x, b.z) < 0.95) {
-            Game._pickT = 0.4;
-            sendEvent({ t: 'pickup', idx, k: 1 });
-          }
-        });
+            sendEvent({ t: 'pickup', idx, k });
+          });
+        };
+        tryPick(W.bottles, 0);
+        tryPick(W.batteries, 1);
       }
     } else {
       // 影者：靠近人类（用插值位置）→ 申报抓捕
@@ -368,6 +380,7 @@
     UI.setHealth(P.health);
     UI.setSan(Game.san);
     UI.setBattery(P.isShadow ? 100 : P.battery);
+    UI.setSlots(P.slots, P.selSlot, P.isShadow ? 100 : P.battery);
     UI.setTimer(t);
     UI.setObjective(iAmShadow
       ? `猎杀剩余人类（${Game.roster.filter((r) => !r.shadow).length} 人）`
@@ -607,21 +620,32 @@
         if (b && !b.taken) {
           b.taken = true; b.g.visible = false;
           if (msg.id === myId()) {
-            if (msg.k === 1) {
-              Game.player.battery = Math.min(100, Game.player.battery + 50);
-              SFX.pickup();
-              UI.msg('电池：手电电量 +50。', null, 2400);
+            const P = Game.player;
+            const slot = P.slots[1] === null ? 1 : (P.slots[2] === null ? 2 : -1);
+            if (slot === -1) {
+              // 兜底：两槽已满的罕见竞态 → 直接生效
+              if (msg.k === 1) P.battery = Math.min(100, P.battery + 50);
+              else {
+                P.stamina = Math.min(100, P.stamina + 45);
+                P.health = Math.min(100, P.health + 25);
+                Game.san = Math.min(100, Game.san + 40);
+              }
             } else {
-              Game.bottles++;
-              Game.player.stamina = Math.min(100, Game.player.stamina + 45);
-              Game.player.health = Math.min(100, Game.player.health + 25);
-              Game.san = Math.min(100, Game.san + 40);
+              P.slots[slot] = msg.k === 1 ? { k: 'battery' } : { k: 'water' };
               SFX.pickup();
+              UI.msg(msg.k === 1 ? '拾取 电池（2/3 选中 · E 使用）' : '拾取 杏仁水（2/3 选中 · E 使用）', null, 2400);
+            }
+            if (msg.k !== 1) {
+              Game.bottles++;
               UI.setBottles(Game.bottles, Game.world.bottleTotal);
-              UI.msg('杏仁水：理智 +40，体力与生命恢复。', null, 2600);
             }
           }
         }
+        break;
+      }
+      case 'chat': {
+        const r = Game.roster.find((x) => x.id === fromId);
+        UI.addChat(r ? r.name : '玩家', String(msg.text || '').slice(0, 80));
         break;
       }
       case 'roundEnd': {
@@ -749,7 +773,7 @@
   // ---------- 网络事件（房间层）----------
   // 所有消息类型统一注册到 Net（host 与 client 走同一 handleMsg 分支）
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   // handleMsg 中补充的房间层消息
@@ -798,7 +822,7 @@
   // 覆盖统一注册使用的入口
   Game._handleMsg = handleMsg;
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'waitNext']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'waitNext', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   Net.onPeer(function (ev) {
