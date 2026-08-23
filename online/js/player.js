@@ -33,6 +33,8 @@
 
       this.flashOn = true;
       this.battery = 100;          // 手电电量：开启时 1/秒，捡电池 +50；影者夜视不耗电
+      this.slots = [{ k: 'flash' }, null, null]; // 1=手电（常驻） 2/3=物品槽
+      this.selSlot = 0;            // 当前选中槽位（E 使用）
       this.flashlight = new THREE.SpotLight(0xffedc0, 2.6, 34, 0.46, 0.42, 1.4);
       this.flashlight.castShadow = false;
       this.flashlight.shadow.mapSize.set(1024, 1024);
@@ -49,12 +51,24 @@
     _bindInput() {
       const canvas = document.getElementById('c');
       window.addEventListener('keydown', (e) => {
+        if (window.Game && Game.chatOpen) { this.keys = {}; return; } // 聊天输入中不响应游戏键
         this.keys[e.code] = true;
-        if (e.code === 'KeyF' && this.enabled && !this.isShadow) this.toggleFlash();
+        if (e.code === 'KeyT') { // 聊天（对局内）
+          e.preventDefault();
+          if (window.Game && (Game.phase === 'playing' || Game.phase === 'countdown')) UI.openChat();
+          return;
+        }
+        if (!this.enabled) return;
+        if (e.code === 'KeyF' && !this.isShadow) this.toggleFlash();
+        else if (e.code === 'Digit1' || e.code === 'Numpad1') this.selSlot = 0;
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') this.selSlot = 1;
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') this.selSlot = 2;
+        else if (e.code === 'KeyE') this.useItem();
       });
       window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
       document.addEventListener('mousemove', (e) => {
         if (!this.enabled) return;
+        if (window.Game && Game.chatOpen) return; // 打字时不转视角
         if (this._locked || this._dragging) {
           this.yaw -= e.movementX * 0.0022;
           this.pitch = clamp(this.pitch - e.movementY * 0.0022, -1.45, 1.45);
@@ -80,6 +94,24 @@
       this.flashOn = !this.flashOn; SFX.click();
     }
 
+    /** 使用当前选中槽位：1=手电开关；2/3=消耗品（杏仁水/电池）；空槽视为手电 */
+    useItem() {
+      if (this.isShadow) return; // 影者夜视内置，无物品
+      const s = this.slots[this.selSlot];
+      if (!s || s.k === 'flash') { this.toggleFlash(); return; }
+      if (s.k === 'water') {
+        this.stamina = Math.min(100, this.stamina + 45);
+        this.health = Math.min(100, this.health + 25);
+        if (window.Game) Game.san = Math.min(100, Game.san + 40);
+        UI.msg('杏仁水：理智 +40，体力与生命恢复。', null, 2600);
+      } else if (s.k === 'battery') {
+        this.battery = Math.min(100, this.battery + 50);
+        UI.msg('电池：手电电量 +50。', null, 2400);
+      }
+      SFX.pickup();
+      this.slots[this.selSlot] = null;
+    }
+
     get pos() { return this.holder.position; }
     get cx() { return this.world.toCX(this.pos.x); }
     get cy() { return this.world.toCY(this.pos.z); }
@@ -98,6 +130,8 @@
       this.yaw = 0; this.pitch = 0;
       this.stamina = 100; this.health = 100;
       this.battery = 100;
+      this.slots = [{ k: 'flash' }, null, null];
+      this.selSlot = 0;
       this.exhausted = false;
       this.flashOn = true;
       this.isShadow = false;

@@ -62,6 +62,29 @@ html, body {
   font-size: 14px; letter-spacing: 3px; color: rgba(220,205,150,0.85); text-shadow: 0 1px 3px #000; }
 #objective::before { content: "◆ "; color: var(--yellow); }
 
+/* 聊天 */
+#chatLog { position: absolute; left: 24px; bottom: 100px;
+  display: flex; flex-direction: column; gap: 4px; max-width: 420px; pointer-events: none; }
+.chat-line { font-size: 14px; color: #d8cfa8; text-shadow: 0 1px 3px #000;
+  background: rgba(0,0,0,0.45); padding: 3px 10px; border-radius: 4px; transition: opacity 0.6s; }
+.chat-line b { color: #9fd8e8; font-weight: 600; }
+#chatInput { position: absolute; left: 24px; bottom: 64px; width: 380px;
+  padding: 8px 12px; font: inherit; font-size: 14px; color: #e8dfb0;
+  background: rgba(0,0,0,0.72); border: 1px solid rgba(201,180,88,0.5);
+  border-radius: 6px; outline: none; }
+#chatInput::placeholder { color: #6a6448; }
+
+/* 物品槽（1 手电 / 2、3 物品，E 使用） */
+#slots { position: absolute; left: 50%; bottom: 54px; transform: translateX(-50%);
+  display: flex; gap: 10px; }
+.slot { width: 76px; height: 54px; border: 1px solid rgba(201,180,88,0.35); border-radius: 6px;
+  background: rgba(0,0,0,0.55); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; position: relative; }
+.slot .key { position: absolute; top: 3px; left: 7px; font-size: 11px; color: #8d8460; }
+.slot .ico { font-size: 13px; color: #c5b878; text-shadow: 0 1px 2px #000; }
+.slot.sel { border-color: #ffd24a; box-shadow: 0 0 10px rgba(255,210,74,0.35); }
+.slot.empty .ico { color: #5a5340; }
+
 #aliveList { position: absolute; right: 20px; top: 20px; text-align: right;
   font-size: 13px; color: #b7ab7a; text-shadow: 0 1px 3px #000; line-height: 1.9; }
 #aliveList .sh { color: #9a7aa8; }
