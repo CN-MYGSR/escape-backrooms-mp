@@ -41,6 +41,8 @@
       <div class="slot empty"><span class="key">2</span><span class="ico" id="slot1">—</span></div>
       <div class="slot empty"><span class="key">3</span><span class="ico" id="slot2">—</span></div>
     </div>
+    <!-- 摇杆容器（移动端专用） -->
+<div id="joystick-zone" style="display:none; position:absolute; left:30px; bottom:30px; width:120px; height:120px; z-index:15;"></div>
   </div>
 
   <!-- 登录状态条 -->
@@ -113,6 +115,7 @@
 <!-- VibeHub SDK：必须绝对地址（红线），相对路径在 vibeapps 域会 404 -->
 <script src="https://vibe.lumigrav.space/sdk/v3/vibehub.js"></script>
 <script src="js/lib/three.min.js?v=8"></script>
+<script src="js/lib/nipplejs.js"></script>
 <script src="js/utils.js?v=8"></script>
 <script src="js/textures.js?v=8"></script>
 <script src="js/maze.js?v=8"></script>
@@ -120,6 +123,7 @@
 <script src="js/ui.js?v=8"></script>
 <script src="js/net.js?v=8"></script>
 <script src="js/world.js?v=8"></script>
+<script src="js/garage.js?v=8"></script>
 <script src="js/player.js?v=8"></script>
 <script src="js/humanoid.js?v=8"></script>
 <script src="js/smiler.js?v=8"></script>

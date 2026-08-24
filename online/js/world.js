@@ -159,26 +159,27 @@
       g.position.set(faceX + dir.x * 0.05, 0, faceZ + dir.z * 0.05);
       g.rotation.y = Math.atan2(dir.x, dir.z);
 
+      // 电梯（通往 B1 停车场；真出口在停车场）
       const frame = new THREE.Mesh(
-        new THREE.BoxGeometry(1.7, 2.5, 0.22),
-        new THREE.MeshStandardMaterial({ color: 0x1c241d, roughness: 0.6, metalness: 0.4 })
+        new THREE.BoxGeometry(1.9, 2.6, 0.26),
+        new THREE.MeshStandardMaterial({ color: 0x3a3e46, roughness: 0.4, metalness: 0.65 })
       );
-      frame.position.set(0, 1.25, 0.1);
+      frame.position.set(0, 1.3, 0.1);
       frame.castShadow = true;
       g.add(frame);
       const door = new THREE.Mesh(
-        new THREE.BoxGeometry(1.34, 2.28, 0.1),
-        new THREE.MeshStandardMaterial({ color: 0x2c4a34, roughness: 0.5, metalness: 0.3 })
+        new THREE.BoxGeometry(1.5, 2.34, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x6a6e78, roughness: 0.3, metalness: 0.75, emissive: 0x2a2e38, emissiveIntensity: 0.5 })
       );
-      door.position.set(0, 1.2, 0.2);
+      door.position.set(0, 1.24, 0.22);
       g.add(door);
       const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.3, 0.62),
-        new THREE.MeshBasicMaterial({ map: TEX.exitSign(), fog: false })
+        new THREE.PlaneGeometry(1.2, 0.4),
+        new THREE.MeshBasicMaterial({ color: 0xffd24a, fog: false })
       );
-      sign.position.set(0, 2.72, 0.28);
+      sign.position.set(0, 2.72, 0.3);
       g.add(sign);
-      const glow = new THREE.PointLight(0x55ff99, 0.9, 9, 1.6);
+      const glow = new THREE.PointLight(0xffd24a, 0.9, 9, 1.6);
       glow.position.set(0, 2.2, 1.1);
       g.add(glow);
       this.group.add(g);

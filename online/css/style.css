@@ -209,3 +209,9 @@ h3 { font-size: 15px; letter-spacing: 3px; color: #c9b458; margin: 14px 0 10px; 
        url("../assets/font/backrooms-zh.woff?v=1") format("woff");
   font-display: swap;
 }
+/* 电脑端强制隐藏摇杆容器 */
+@media (hover: hover) and (pointer: fine) {
+    #joystick-zone {
+        display: none !important;
+    }
+}

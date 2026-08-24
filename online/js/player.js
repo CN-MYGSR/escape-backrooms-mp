@@ -10,6 +10,8 @@
       this.cam = camera;
       this.world = world;
       this.keys = {};
+      this.stickX = 0;
+      this.stickY = 0;
       this.yaw = 0; this.pitch = 0;
       this.vel = new THREE.Vector3();
       this.kb = new THREE.Vector3();
@@ -170,8 +172,27 @@
       const friendly = !!(g && g.settings && g.settings.friendly);
       const san = g ? g.san : 100;
 
+      // 原始键盘输入
       let mx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0);
       let mz = (k.KeyS || k.ArrowDown ? 1 : 0) - (k.KeyW || k.ArrowUp ? 1 : 0);
+
+      // ---------- 合并摇杆输入 ----------
+      // 摇杆轴属性默认为0，由外部（main.js）设置
+      const stickDeadZone = 0.1;
+      const hasStick = (Math.abs(this.stickX) > stickDeadZone || Math.abs(this.stickY) > stickDeadZone);
+      if (hasStick) {
+      // 叠加摇杆（同时保留键盘，可叠加后归一化）
+        mx += this.stickX;
+        mz += this.stickY;
+        // 限幅
+        const len = Math.hypot(mx, mz);
+        if (len > 1) {
+          mx /= len;
+          mz /= len;
+        }
+      }
+      // ----------------------------------
+      
       const moving = mx !== 0 || mz !== 0;
       this.moving = moving;
 

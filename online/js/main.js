@@ -130,6 +130,61 @@
     if (!Game.myName) Game.myName = '练习生-' + String(Math.floor(Math.random() * 900) + 100);
     refreshRooms();
   })();
+  // 判断是否为触摸设备
+const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+if (isTouchDevice) {
+    const script = document.createElement('script');
+    script.src = 'js/lib/nipplejs.js';   // 加上这一行！
+    script.onload = () => {
+        initJoystick();
+    };
+    document.head.appendChild(script);
+} else {
+    console.log('电脑端：不加载摇杆');
+}
+
+function initJoystick() {
+    const zone = document.getElementById('joystick-zone');
+    zone.style.display = 'block'; // 显示
+
+    const manager = nipplejs.create({
+        zone: zone,
+        mode: 'static',          // 固定位置摇杆
+        position: { left: '50%', top: '50%' },
+        color: 'rgba(255,255,255,0.25)',
+        size: 120,
+        restOpacity: 0.5,
+    });
+
+    // 摇杆移动时存储数据到全局或 Player 实例
+    let stickX = 0, stickY = 0;
+
+    manager.on('move', (evt, data) => {
+        // data.vector 是一个 { x, y }，范围 -1 ~ 1
+        const v = data.vector;
+        stickX = v.x;
+        stickY = v.y;
+        // 将值传给 Player 实例
+        if (Game.player) {
+            Game.player.stickX = stickX;
+            Game.player.stickY = stickY;
+        }
+    });
+
+    manager.on('end', () => {
+        stickX = 0;
+        stickY = 0;
+        if (Game.player) {
+            Game.player.stickX = 0;
+            Game.player.stickY = 0;
+        }
+    });
+
+    // 防止触摸滚动
+    zone.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    zone.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+}
 
   $('btnLogin').addEventListener('click', async () => {
     const u = await Net.login();
