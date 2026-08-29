@@ -78,6 +78,10 @@
 
   // ---------- 房间与大厅 ----------
   Game.enterRoom = function (roomId, solo) {
+    if (!solo && window.EscapeBackroomsWorkshop && !EscapeBackroomsWorkshop.isMultiplayerAllowed()) {
+      UI.msg('已启用创意工坊 Mod：当前联机策略为禁用 Mod，请先关闭 Mod。', 'warn', 4200);
+      return false;
+    }
     Game.solo = !!solo;
     Game.roomId = roomId;
     Game.roster = [{
@@ -90,6 +94,7 @@
     if (solo) {
       UI.msg('本地练习模式： Esc 之外的一切照常，只是没有其他玩家。', null, 4000);
     }
+    return true;
   };
 
   Game._refreshPlayerList = function () {
@@ -188,9 +193,16 @@
     Game.smiler = new Smiler(gl.scene, Game.world);
     Game.smiler.reset(Game.world.toWX(pickAt(0.3).cx), Game.world.toWZ(pickAt(0.3).cy));
     if (isHost() || Game.solo) {
-      Game.humanoid.onHit = (id, dmg, kx, kz) =>
-        broadcast({ t: 'hit', target: id, dmg, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
-      Game.smiler.onHit = (id, dps) => broadcast({ t: 'hit', target: id, dmg: +dps.toFixed(2) });
+      Game.humanoid.onHit = (id, dmg, kx, kz) => {
+        const amount = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.humanoid-damage', dmg) : dmg;
+        if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('monster:attack', { monsterId: 'humanoid', targetId: id, damage: amount });
+        broadcast({ t: 'hit', target: id, dmg: amount, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
+      };
+      Game.smiler.onHit = (id, dps) => {
+        const amount = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.smiler-damage', dps) : dps;
+        if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('monster:attack', { monsterId: 'smiler', targetId: id, damage: amount });
+        broadcast({ t: 'hit', target: id, dmg: +amount.toFixed(2) });
+      };
     }
 
     // 远端化身 + 插值缓冲
@@ -199,7 +211,11 @@
     Game.bufH = new Buf(); Game.bufS = new Buf();
     Game.roster.forEach((r, i) => {
       if (r.id === myId()) return;
-      Game.avatars.set(i, new Avatar(gl.scene, r.name, i));
+      const avatar = new Avatar(gl.scene, r.name, i);
+      Game.avatars.set(i, avatar);
+      if (window.EscapeBackroomsWorkshop) {
+        EscapeBackroomsWorkshop.applyAppearance(avatar.group, { kind: 'remote-player', name: r.name, index: i });
+      }
       Game.bufs.set(i, new Buf());
     });
     Game._netPos = new Map(); // 房主：idx -> {x,z,yaw,spd,f,sp,zn,t}
@@ -228,6 +244,9 @@
     if (isHost() || Game.solo) {
       Game.mimic.onHit = (id, dmg, kx, kz) =>
         broadcast({ t: 'hit', target: id, dmg, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
+    }
+    if (window.EscapeBackroomsWorkshop) {
+      EscapeBackroomsWorkshop.startRound({ game: Game, scene: gl.scene, worlds: Game.worlds, maze: Game.world, garage, seed });
     }
 
     Game.phase = 'countdown';
@@ -275,12 +294,14 @@
     Game.elevT = 0;
     Game.zoneCd = 1.25;
     Game._elevMsg = false;
+    if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('zone:changed', { from: nextZone === 0 ? 1 : 0, to: nextZone, world: next });
     UI.setObjective(nextZone === 1 ? '在停车场寻找绿色 EXIT' : '继续探索并寻找电梯');
   }
 
   // ---------- 回合本地清理 ----------
   Game.endRoundLocal = function () {
     const gl = Game.gl;
+    if (window.EscapeBackroomsWorkshop && Game.worlds) EscapeBackroomsWorkshop.endRound({ game: Game });
     const worlds = Game.worlds || [];
     const garage = worlds[1];
     if (Game.mimic && garage) Game.mimic.dispose(garage.group);
@@ -335,7 +356,8 @@
 
     // ---- 本地理智（仅人类）----
     if (!iAmShadow) {
-      if (t > 3) Game.san = Math.max(0, Game.san - 0.1 * dt);
+      const sanityDrain = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('player.sanity-drain', 0.1) : 0.1;
+      if (t > 3) Game.san = Math.max(0, Game.san - sanityDrain * dt);
       const F = Game._flags;
       if (Game.san <= 75 && !F.m75) { F.m75 = true; UI.msg('脚步越来越沉……（理智 ≤75：移速下降）', 'warn', 3000); }
       if (Game.san <= 50 && !F.m50) { F.m50 = true; UI.msg('你听见了自己的心跳。（理智 ≤50）', 'warn', 3000); }
@@ -372,6 +394,10 @@
         };
         tryPick(W.bottles, 0);
         tryPick(W.batteries, 1);
+        if (window.EscapeBackroomsWorkshop) {
+          const modItem = EscapeBackroomsWorkshop.nearbyItem(Game.zone, P.pos.x, P.pos.z, 0.95);
+          if (modItem && hasSpace) sendEvent({ t: 'workshopPickup', idx: modItem.index, zn: Game.zone });
+        }
       }
     } else {
       // 影者：靠近人类（用插值位置）→ 申报抓捕
@@ -490,6 +516,7 @@
       name: r.name, shadow: r.shadow, me: r.id === myId(),
     })));
     UI.setDarkness(clamp(1 - dist2D(P.pos.x, P.pos.z, Game.smiler.pos.x, Game.smiler.pos.z) / 4.5, 0, 0.9));
+    if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.tick({ game: Game, player: P, zone: Game.zone, time: t });
     SFX.update(dt);
   };
 
@@ -526,8 +553,9 @@
     });
     if (baseTarget) {
       const aggr = Math.min(0.9, Game.bottles * 0.14 + t / 150 * 0.35);
-      Game.humanoid.speedBonus = aggr;
-      Game.smiler.speedBonus = aggr * 0.5;
+      const monsterScale = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.speed-multiplier', 1) : 1;
+      Game.humanoid.speedBonus = aggr * monsterScale;
+      Game.smiler.speedBonus = aggr * 0.5 * monsterScale;
       Game.humanoid.updateHost(dt, baseTarget, t);
       Game.smiler.updateHost(dt, baseTarget, Game.gl.camera, t);
       Game.bufH.push(tNow, Game.humanoid.pos.x, Game.humanoid.pos.z, Game.humanoid.yaw,
@@ -728,6 +756,28 @@
         }
         break;
       }
+      case 'workshopPickup': {
+        if (!(isHost() || Game.solo) || !window.EscapeBackroomsWorkshop) break;
+        const item = EscapeBackroomsWorkshop.getActiveItem(msg.idx, msg.zn || 0);
+        const p = _latestPos(fromId);
+        const posOk = Game.solo || (p && p.zone === (msg.zn || 0) && item && dist2D(p.x, p.z, item.x, item.z) < 2.4);
+        if (item && !item.taken && posOk) broadcast({ t: 'workshopPicked', idx: msg.idx, zn: msg.zn || 0, id: fromId });
+        break;
+      }
+      case 'workshopPicked': {
+        if (!window.EscapeBackroomsWorkshop) break;
+        const item = EscapeBackroomsWorkshop.takeItem(msg.idx, msg.zn || 0);
+        if (item && msg.id === myId()) {
+          const info = EscapeBackroomsWorkshop.getItem(item.itemId);
+          const slot = Game.player.slots[1] === null ? 1 : (Game.player.slots[2] === null ? 2 : -1);
+          if (slot >= 0) {
+            Game.player.slots[slot] = { k: 'workshop', id: item.itemId, label: info.name || item.itemId, icon: info.icon || 'Mod' };
+            UI.msg(`拾取 ${info.name || item.itemId}（按 E 使用）`, null, 2600);
+            SFX.pickup();
+          }
+        }
+        break;
+      }
       case 'pickup': { // 房主校验（k: 0=杏仁水 1=电池）
         if (!(isHost() || Game.solo)) break;
         const world = Game.worlds && Game.worlds[msg.zn === undefined ? 0 : msg.zn];
@@ -900,7 +950,7 @@
   // ---------- 网络事件（房间层）----------
   // 所有消息类型统一注册到 Net（host 与 client 走同一 handleMsg 分支）
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'chat']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'workshopPickup', 'workshopPicked', 'roundEnd', 'hello', 'ready', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   // handleMsg 中补充的房间层消息
@@ -949,7 +999,7 @@
   // 覆盖统一注册使用的入口
   Game._handleMsg = handleMsg;
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'waitNext', 'chat']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'workshopPickup', 'workshopPicked', 'roundEnd', 'hello', 'ready', 'waitNext', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   Net.onPeer(function (ev) {

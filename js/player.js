@@ -110,6 +110,9 @@
       } else if (s.k === 'battery') {
         this.battery = Math.min(100, this.battery + 50);
         UI.msg('电池：手电电量 +50。', null, 2400);
+      } else if (s.k === 'workshop' && window.EscapeBackroomsWorkshop) {
+        const consumed = EscapeBackroomsWorkshop.useItem(s.id, { player: this, zone: Game.zone });
+        if (!consumed) return;
       }
       SFX.pickup();
       this.slots[this.selSlot] = null;
@@ -205,7 +208,8 @@
         speed = sprinting ? 8.6 : 7.0;
       } else {
         const sanSlow = san <= 75 ? 0.8 : 1;
-        speed = (sprinting ? 6.3 : 3.7) * sanSlow;
+        const workshopSpeed = window.EscapeBackroomsWorkshop ? (sprinting ? EscapeBackroomsWorkshop.getRule('player.sprint-speed', 6.3) : EscapeBackroomsWorkshop.getRule('player.walk-speed', 3.7)) : (sprinting ? 6.3 : 3.7);
+        speed = workshopSpeed * sanSlow;
       }
 
       // 体力（影者无限）
@@ -275,7 +279,8 @@
 
       // 手电筒（影者强制常亮——夜视光源，不耗电）
       if (this.flashOn && !this.isShadow) {
-        this.battery = Math.max(0, this.battery - dt);
+        const drain = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('player.battery-drain', 1) : 1;
+        this.battery = Math.max(0, this.battery - drain * dt);
         if (this.battery <= 0) {
           this.flashOn = false;
           UI.msg('手电筒没电了', 'warn', 2600);

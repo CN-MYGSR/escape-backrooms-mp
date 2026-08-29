@@ -91,7 +91,7 @@
       if (i === 0) {
         txt = '手电' + (batPct != null ? '·' + Math.round(batPct) + '%' : '');
       } else if (slots && slots[i]) {
-        txt = slots[i].k === 'water' ? '杏仁水' : '电池';
+        txt = slots[i].k === 'water' ? '杏仁水' : slots[i].k === 'battery' ? '电池' : (slots[i].label || slots[i].id || 'Mod');
         empty = false;
       }
       ico.textContent = txt;

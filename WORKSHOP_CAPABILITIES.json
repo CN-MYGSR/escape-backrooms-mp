@@ -1,0 +1,68 @@
+[
+  {
+    "id": "player.appearance",
+    "name": "玩家外观",
+    "description": "添加本地玩家和远端玩家化身的装饰模型；不能修改碰撞、身份或联机位置。",
+    "multiplayer": "local"
+  },
+  {
+    "id": "audio.custom",
+    "name": "自定义音效",
+    "description": "注册并播放 Mod 自带的本地音效；不能读取账号音频权限或替换网络音频协议。",
+    "multiplayer": "local"
+  },
+  {
+    "id": "audio.monster",
+    "name": "怪物音效",
+    "description": "监听怪物攻击/击败事件并播放本地怪物音效；不能改变联机攻击结果。",
+    "multiplayer": "local"
+  },
+  {
+    "id": "world.decoration",
+    "name": "地图装饰模型",
+    "description": "在迷宫或 B1 停车场添加视觉模型、灯光和非碰撞装饰；不能替换核心地图网格。",
+    "multiplayer": "local"
+  },
+  {
+    "id": "item.custom",
+    "name": "自定义道具",
+    "description": "注册、生成和拾取自定义道具；道具只在本地练习中生效。",
+    "multiplayer": "blocked"
+  },
+  {
+    "id": "item.heal-san-battery",
+    "name": "恢复类道具效果",
+    "description": "自定义道具可以恢复生命、理智、体力或手电电量；不能影响联机玩家。",
+    "multiplayer": "blocked"
+  },
+  {
+    "id": "item.monster-damage",
+    "name": "武器与怪物伤害",
+    "description": "自定义道具可以在本地练习中对影者、笑靥或伪装者造成伤害；不能伪造联机击杀。",
+    "multiplayer": "blocked"
+  },
+  {
+    "id": "rules.player-values",
+    "name": "玩家数值规则",
+    "description": "调整本地玩家移速、冲刺速度、手电消耗和理智消耗；必须使用受限规则 ID。",
+    "multiplayer": "blocked"
+  },
+  {
+    "id": "rules.monster-values",
+    "name": "怪物数值规则",
+    "description": "调整本地怪物速度和攻击伤害；不能修改联机协议或房主验证。",
+    "multiplayer": "blocked"
+  },
+  {
+    "id": "ui.hud-widget",
+    "name": "HUD 小组件",
+    "description": "在工坊专用 HUD 容器中显示状态和 Mod 信息；不能依赖私有 DOM 节点。",
+    "multiplayer": "local"
+  },
+  {
+    "id": "events.round-zone",
+    "name": "回合与区域事件",
+    "description": "监听游戏启动、回合开始/结束、区域和怪物事件；不能覆盖游戏生命周期。",
+    "multiplayer": "local"
+  }
+]
