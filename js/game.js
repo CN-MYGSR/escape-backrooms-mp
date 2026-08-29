@@ -13,9 +13,9 @@
   // ---------- 插值缓冲 ----------
   class Buf {
     constructor() { this.s = []; }
-    push(t, x, z, yaw, spd) {
+    push(t, x, z, yaw, spd, zone) {
       const s = this.s;
-      s.push({ t, x, z, yaw, spd });
+      s.push({ t, x, z, yaw, spd, zone: zone === undefined ? 0 : zone });
       if (s.length > 24) s.shift();
     }
     at(rt) {
@@ -29,7 +29,7 @@
           let dy = b.yaw - a.yaw;
           while (dy > Math.PI) dy -= Math.PI * 2;
           while (dy < -Math.PI) dy += Math.PI * 2;
-          return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, yaw: a.yaw + dy * k, spd: b.spd };
+          return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, yaw: a.yaw + dy * k, spd: b.spd, zone: b.zone };
         }
       }
       return s[s.length - 1];
@@ -78,6 +78,10 @@
 
   // ---------- 房间与大厅 ----------
   Game.enterRoom = function (roomId, solo) {
+    if (!solo && window.EscapeBackroomsWorkshop && !EscapeBackroomsWorkshop.isMultiplayerAllowed()) {
+      UI.msg('已启用创意工坊 Mod：当前联机策略为禁用 Mod，请先关闭 Mod。', 'warn', 4200);
+      return false;
+    }
     Game.solo = !!solo;
     Game.roomId = roomId;
     Game.roster = [{
@@ -90,6 +94,7 @@
     if (solo) {
       UI.msg('本地练习模式： Esc 之外的一切照常，只是没有其他玩家。', null, 4000);
     }
+    return true;
   };
 
   Game._refreshPlayerList = function () {
@@ -188,9 +193,16 @@
     Game.smiler = new Smiler(gl.scene, Game.world);
     Game.smiler.reset(Game.world.toWX(pickAt(0.3).cx), Game.world.toWZ(pickAt(0.3).cy));
     if (isHost() || Game.solo) {
-      Game.humanoid.onHit = (id, dmg, kx, kz) =>
-        broadcast({ t: 'hit', target: id, dmg, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
-      Game.smiler.onHit = (id, dps) => broadcast({ t: 'hit', target: id, dmg: +dps.toFixed(2) });
+      Game.humanoid.onHit = (id, dmg, kx, kz) => {
+        const amount = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.humanoid-damage', dmg) : dmg;
+        if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('monster:attack', { monsterId: 'humanoid', targetId: id, damage: amount });
+        broadcast({ t: 'hit', target: id, dmg: amount, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
+      };
+      Game.smiler.onHit = (id, dps) => {
+        const amount = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.smiler-damage', dps) : dps;
+        if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('monster:attack', { monsterId: 'smiler', targetId: id, damage: amount });
+        broadcast({ t: 'hit', target: id, dmg: +amount.toFixed(2) });
+      };
     }
 
     // 远端化身 + 插值缓冲
@@ -199,7 +211,11 @@
     Game.bufH = new Buf(); Game.bufS = new Buf();
     Game.roster.forEach((r, i) => {
       if (r.id === myId()) return;
-      Game.avatars.set(i, new Avatar(gl.scene, r.name, i));
+      const avatar = new Avatar(gl.scene, r.name, i);
+      Game.avatars.set(i, avatar);
+      if (window.EscapeBackroomsWorkshop) {
+        EscapeBackroomsWorkshop.applyAppearance(avatar.group, { kind: 'remote-player', name: r.name, index: i });
+      }
       Game.bufs.set(i, new Buf());
     });
     Game._netPos = new Map(); // 房主：idx -> {x,z,yaw,spd,f,sp,zn,t}
@@ -210,6 +226,8 @@
     const garage = new GarageWorld(gl.scene, garageSeed, Game.settings);
     Game.worlds.push(garage);
     Game.zone = 0;
+    Game.worlds[0].group.visible = true;
+    garage.group.visible = false;
     Game.elevT = 0; Game.zoneCd = 0; Game._elevMsg = false;
     // 停车场实体：伪装者 + 2 名搜救队（挂在 garage.group 下，随区域显隐）
     Game.mimic = new Mimic(garage.group, garageSeed ^ 0x11, '玩家-' + (100 + garageSeed % 900));
@@ -227,6 +245,9 @@
       Game.mimic.onHit = (id, dmg, kx, kz) =>
         broadcast({ t: 'hit', target: id, dmg, kx: +kx.toFixed(2), kz: +kz.toFixed(2) });
     }
+    if (window.EscapeBackroomsWorkshop) {
+      EscapeBackroomsWorkshop.startRound({ game: Game, scene: gl.scene, worlds: Game.worlds, maze: Game.world, garage, seed });
+    }
 
     Game.phase = 'countdown';
     Game._countT = 3.2;
@@ -242,15 +263,51 @@
     console.log(`[对局开始] seed=${seed} 玩家=${roster.length} 我=房主:${isHost() || Game.solo}`);
   };
 
+  function activeWorld() {
+    return (Game.worlds && Game.worlds[Game.zone]) || Game.world;
+  }
+
+  function zoneEntry(world, zone) {
+    if (zone === 1) {
+      return { x: world.lift.trigger.x + 1.1, z: world.lift.trigger.z };
+    }
+    const room = Game.maze.rooms.find((r) => r.isExit) || Game.maze.rooms[Game.maze.rooms.length - 1];
+    return { x: world.toWX(room.cx), z: world.toWZ(room.cy) };
+  }
+
+  function _switchZone() {
+    if (!Game.worlds || !Game.player) return;
+    const nextZone = Game.zone === 0 ? 1 : 0;
+    const next = Game.worlds[nextZone];
+    if (!next) return;
+    const entry = zoneEntry(next, nextZone);
+    Game.zone = nextZone;
+    Game.world = next;
+    Game.player.world = next;
+    Game.player.pos.set(entry.x, Game.player.eyeH, entry.z);
+    Game.player.vel.set(0, 0, 0);
+    Game.player.kb.set(0, 0, 0);
+    Game.worlds.forEach((world, i) => { world.group.visible = i === nextZone; });
+    if (Game.humanoid) Game.humanoid.group.visible = nextZone === 0;
+    if (Game.smiler) Game.smiler.group.visible = nextZone === 0;
+    Game.avatars?.forEach((avatar) => { avatar.group.visible = false; });
+    Game.elevT = 0;
+    Game.zoneCd = 1.25;
+    Game._elevMsg = false;
+    if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.emit('zone:changed', { from: nextZone === 0 ? 1 : 0, to: nextZone, world: next });
+    UI.setObjective(nextZone === 1 ? '在停车场寻找绿色 EXIT' : '继续探索并寻找电梯');
+  }
+
   // ---------- 回合本地清理 ----------
   Game.endRoundLocal = function () {
     const gl = Game.gl;
-    const garage = Game.worlds && Game.worlds[1];
+    if (window.EscapeBackroomsWorkshop && Game.worlds) EscapeBackroomsWorkshop.endRound({ game: Game });
+    const worlds = Game.worlds || [];
+    const garage = worlds[1];
     if (Game.mimic && garage) Game.mimic.dispose(garage.group);
     if (Game.rescuers && garage) Game.rescuers.forEach((r) => r.dispose(garage.group));
-    if (garage) garage.dispose(gl.scene);
-    Game.worlds = null; Game.mimic = null; Game.rescuers = null;
-    if (Game.world) { Game.world.dispose(gl.scene); Game.world = null; }
+    worlds.forEach((world) => world.dispose(gl.scene));
+    Game.worlds = null; Game.world = null; Game.mimic = null; Game.rescuers = null;
     if (Game.humanoid) { disposeGroup(gl.scene, Game.humanoid.group); Game.humanoid = null; }
     if (Game.smiler) { disposeGroup(gl.scene, Game.smiler.group); Game.smiler = null; }
     if (Game.avatars) { Game.avatars.forEach((a) => a.dispose(gl.scene)); Game.avatars = null; }
@@ -281,14 +338,17 @@
       }
     }
     if (Game.phase !== 'playing') {
-      if (Game.world) Game.world.update(dt, Game.player.pos, Game.time);
+      const world = activeWorld();
+      if (world) world.update(dt, Game.player.pos, Game.time);
       return;
     }
     Game._step(dt, tNow);
   };
 
   Game._step = function (dt, tNow) {
-    const P = Game.player, W = Game.world;
+    const P = Game.player, W = activeWorld();
+    Game.world = W;
+    P.world = W;
     const t = Game.time += dt;
     P.update(dt);
     const me = Game.roster[myIdx()];
@@ -296,7 +356,8 @@
 
     // ---- 本地理智（仅人类）----
     if (!iAmShadow) {
-      if (t > 3) Game.san = Math.max(0, Game.san - 0.1 * dt);
+      const sanityDrain = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('player.sanity-drain', 0.1) : 0.1;
+      if (t > 3) Game.san = Math.max(0, Game.san - sanityDrain * dt);
       const F = Game._flags;
       if (Game.san <= 75 && !F.m75) { F.m75 = true; UI.msg('脚步越来越沉……（理智 ≤75：移速下降）', 'warn', 3000); }
       if (Game.san <= 50 && !F.m50) { F.m50 = true; UI.msg('你听见了自己的心跳。（理智 ≤50）', 'warn', 3000); }
@@ -328,11 +389,15 @@
               return;
             }
             Game._pickT = 0.4;
-            sendEvent({ t: 'pickup', idx, k });
+            sendEvent({ t: 'pickup', idx, k, zn: Game.zone });
           });
         };
         tryPick(W.bottles, 0);
         tryPick(W.batteries, 1);
+        if (window.EscapeBackroomsWorkshop) {
+          const modItem = EscapeBackroomsWorkshop.nearbyItem(Game.zone, P.pos.x, P.pos.z, 0.95);
+          if (modItem && hasSpace) sendEvent({ t: 'workshopPickup', idx: modItem.index, zn: Game.zone });
+        }
       }
     } else {
       // 影者：靠近人类（用插值位置）→ 申报抓捕
@@ -341,7 +406,7 @@
         Game.roster.forEach((r, i) => {
           if (r.shadow || r.id === myId()) return;
           const st = Game.bufs.get(i) && Game.bufs.get(i).at(tNow - INTERP_MS);
-          if (st && dist2D(P.pos.x, P.pos.z, st.x, st.z) < 1.3) {
+          if (st && st.zone === Game.zone && dist2D(P.pos.x, P.pos.z, st.x, st.z) < 1.3) {
             Game._catchT = 0.7;
             sendEvent({ t: 'catch', target: r.id });
           }
@@ -384,7 +449,7 @@
         x: +P.pos.x.toFixed(2), z: +P.pos.z.toFixed(2),
         y: +P.yaw.toFixed(3), s: +P.speed.toFixed(1),
         f: P.flashOn ? 1 : 0, sp: P.sprinting ? 1 : 0,
-        z: Game.zone,
+        zn: Game.zone,
       });
     }
 
@@ -400,6 +465,7 @@
       if (!buf || !av) return;
       const st = buf.at(rt);
       if (st) {
+        av.group.visible = st.zone === Game.zone;
         av.applyState(st.x, st.z, st.yaw, st.spd, r.shadow);
         av.setGlow(iAmShadow && !r.shadow);
         av.update(dt, Game.player.pos);
@@ -416,6 +482,10 @@
     if (!(isHost() || Game.solo)) {
       Game.humanoid.updateRemote(dt, t);
       Game.smiler.updateRemote(dt, Game.gl.camera);
+      if (Game.zone === 1 && Game.mimic) {
+        Game.mimic.updateRemote(dt, t, Game.gl.camera);
+        Game.rescuers?.forEach((rescuer) => rescuer.updateRemote(dt, t));
+      }
     }
 
     // ---- 世界/HUD/氛围 ----
@@ -440,70 +510,90 @@
     UI.setSlots(P.slots, P.selSlot, P.isShadow ? 100 : P.battery);
     UI.setTimer(t);
     UI.setObjective(iAmShadow
-      ? `猎杀剩余人类（${Game.roster.filter((r) => !r.shadow).length} 人）`
-      : '找到出口并穿过它');
+      ? `猎杀剩余人类：${Game.roster.filter((r) => !r.shadow).length} 人`
+      : (Game.zone === 1 ? '在停车场寻找绿色 EXIT' : '找到电梯并进入停车场'));
     UI.setAliveList(Game.roster.map((r, i) => ({
       name: r.name, shadow: r.shadow, me: r.id === myId(),
     })));
     UI.setDarkness(clamp(1 - dist2D(P.pos.x, P.pos.z, Game.smiler.pos.x, Game.smiler.pos.z) / 4.5, 0, 0.9));
+    if (window.EscapeBackroomsWorkshop) EscapeBackroomsWorkshop.tick({ game: Game, player: P, zone: Game.zone, time: t });
     SFX.update(dt);
   };
 
   // ---------- 房主演算 ----------
   function _hostSim(dt, t, tNow) {
     const P = Game.player;
-    // 最近的人类（含自己）
-    let target = null, td = Infinity;
+    const humans = [];
     Game.roster.forEach((r, i) => {
       if (r.shadow) return;
-      let x, z, yaw, f, sp;
-      if (r.id === myId()) { x = P.pos.x; z = P.pos.z; yaw = P.yaw; f = P.flashOn; sp = P.sprinting; }
-      else {
+      let x, z, yaw, f, sp, zone;
+      if (r.id === myId()) {
+        x = P.pos.x; z = P.pos.z; yaw = P.yaw; f = P.flashOn; sp = P.sprinting; zone = Game.zone;
+      } else {
         const np = Game._netPos.get(i);
-        if (!np || tNow - np.t > 3000) return; // 超时无数据不作为目标
-        x = np.x; z = np.z; yaw = np.yaw; f = !!np.f; sp = !!np.sp;
+        if (!np || tNow - np.t > 3000) return;
+        x = np.x; z = np.z; yaw = np.yaw; f = !!np.f; sp = !!np.sp; zone = np.zone || 0;
       }
-      const d = dist2D(Game.humanoid.pos.x, Game.humanoid.pos.z, x, z);
-      if (d < td) {
-        td = d;
-        target = {
-          id: r.id, x, z, yaw, f, sp,
-          pos: new THREE.Vector3(x, 1.62, z),
-          get cx() { return Game.world.toCX(this.x); },
-          get cy() { return Game.world.toCY(this.z); },
-          get forward() { return new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); },
-          flashOn: f, sprinting: sp,
-        };
-      }
+      humans.push({
+        id: r.id, x, z, yaw, f, sp, zone,
+        pos: new THREE.Vector3(x, 1.62, z),
+        y: 1.62,
+        get cx() { return Game.worlds[zone].toCX(this.x); },
+        get cy() { return Game.worlds[zone].toCY(this.z); },
+        get forward() { return new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); },
+        flashOn: f, sprinting: sp,
+      });
     });
-    if (target) {
+
+    const baseHumans = humans.filter((human) => human.zone === 0);
+    let baseTarget = null, baseTargetDistance = Infinity;
+    baseHumans.forEach((human) => {
+      const d = dist2D(Game.humanoid.pos.x, Game.humanoid.pos.z, human.x, human.z);
+      if (d < baseTargetDistance) { baseTargetDistance = d; baseTarget = human; }
+    });
+    if (baseTarget) {
       const aggr = Math.min(0.9, Game.bottles * 0.14 + t / 150 * 0.35);
-      Game.humanoid.speedBonus = aggr;
-      Game.smiler.speedBonus = aggr * 0.5;
-      Game.humanoid.updateHost(dt, target, t);
-      Game.smiler.updateHost(dt, target, Game.gl.camera, t);
-      // 房主把 AI 状态写进自己的缓冲（统一插值路径）
+      const monsterScale = window.EscapeBackroomsWorkshop ? EscapeBackroomsWorkshop.getRule('monster.speed-multiplier', 1) : 1;
+      Game.humanoid.speedBonus = aggr * monsterScale;
+      Game.smiler.speedBonus = aggr * 0.5 * monsterScale;
+      Game.humanoid.updateHost(dt, baseTarget, t);
+      Game.smiler.updateHost(dt, baseTarget, Game.gl.camera, t);
       Game.bufH.push(tNow, Game.humanoid.pos.x, Game.humanoid.pos.z, Game.humanoid.yaw,
-        Game.humanoid.curSpeed || 0);
-      Game.bufS.push(tNow, Game.smiler.pos.x, Game.smiler.pos.z, 0, 0);
+        Game.humanoid.curSpeed || 0, 0);
+      Game.bufS.push(tNow, Game.smiler.pos.x, Game.smiler.pos.z, 0, 0, 0);
     }
 
+    const garageHumans = humans.filter((human) => human.zone === 1);
+    let garageTarget = null, garageTargetDistance = Infinity;
+    garageHumans.forEach((human) => {
+      const d = Game.mimic ? dist2D(Game.mimic.x, Game.mimic.z, human.x, human.z) : Infinity;
+      if (d < garageTargetDistance) { garageTargetDistance = d; garageTarget = human; }
+    });
+    if (Game.rescuers) Game.rescuers.forEach((rescuer) => rescuer.updateHost(dt, garageHumans, t));
+    if (Game.mimic) Game.mimic.updateHost(dt, garageTarget, Game.rescuers || [], t, Game.gl.camera);
     // 20Hz 快照广播
     Game._snapT = (Game._snapT || 0) - dt;
     if (Game._snapT <= 0 && !Game.solo) {
       Game._snapT = 1 / 20;
       const ps = Game.roster.map((r, i) => {
         if (r.id === myId())
-          return [i, +P.pos.x.toFixed(2), +P.pos.z.toFixed(2), +P.yaw.toFixed(3), +P.speed.toFixed(1), P.isShadow ? 1 : 0];
+          return [i, +P.pos.x.toFixed(2), +P.pos.z.toFixed(2), +P.yaw.toFixed(3), +P.speed.toFixed(1), P.isShadow ? 1 : 0, Game.zone];
         const np = Game._netPos.get(i);
-        if (!np) return [i, 0, 0, 0, 0, r.shadow ? 1 : 0];
-        return [i, np.x, np.z, np.yaw, np.spd, r.shadow ? 1 : 0];
+        if (!np) return [i, 0, 0, 0, 0, r.shadow ? 1 : 0, 0];
+        return [i, np.x, np.z, np.yaw, np.spd, r.shadow ? 1 : 0, np.zone || 0];
       });
       Net.sendRT({
         t: 'snap', ps,
         h: [+Game.humanoid.pos.x.toFixed(2), +Game.humanoid.pos.z.toFixed(2),
             +Game.humanoid.yaw.toFixed(3), +(Game.humanoid.curSpeed || 0).toFixed(1)],
         s: [+Game.smiler.pos.x.toFixed(2), +Game.smiler.pos.z.toFixed(2)],
+        m: Game.zone === 1 && Game.mimic ? [
+          +Game.mimic.x.toFixed(2), +Game.mimic.z.toFixed(2), +Game.mimic.yaw.toFixed(3),
+          +(Game.mimic.speed || 0).toFixed(1), Game.mimic.revealT > 0 ? 1 : 0,
+        ] : null,
+        r: Game.zone === 1 && Game.rescuers ? Game.rescuers.map((rescuer) => [
+          +rescuer.x.toFixed(2), +rescuer.z.toFixed(2), +rescuer.yaw.toFixed(3), +(rescuer.speed || 0).toFixed(1),
+        ]) : null,
       });
     }
 
@@ -579,7 +669,7 @@
       }
       case 'p': { // 仅房主处理
         if (isHost() && !Game.solo) {
-          Game._netPos.set(msg.i, { x: msg.x, z: msg.z, yaw: msg.y, spd: msg.s, f: msg.f, sp: msg.sp, t: performance.now() });
+          Game._netPos.set(msg.i, { x: msg.x, z: msg.z, yaw: msg.y, spd: msg.s, f: msg.f, sp: msg.sp, zone: msg.zn === undefined ? 0 : msg.zn, t: performance.now() });
         }
         break;
       }
@@ -587,15 +677,19 @@
         if (!(isHost() || Game.solo)) {
           const now = performance.now();
           for (const row of msg.ps) {
-            const [i, x, z, yaw, spd, sh] = row;
+            const [i, x, z, yaw, spd, sh, zone] = row;
             if (i === myIdx()) continue;
             const buf = Game.bufs.get(i);
-            if (buf) buf.push(now, x, z, yaw, spd);
+            if (buf) buf.push(now, x, z, yaw, spd, zone);
             const r = Game.roster[i];
             if (r) r.shadow = !!sh;
           }
           if (msg.h) Game.bufH.push(now, msg.h[0], msg.h[1], msg.h[2], msg.h[3] || 0);
-          if (msg.s) Game.bufS.push(now, msg.s[0], msg.s[1], 0, 0);
+          if (msg.s) Game.bufS.push(now, msg.s[0], msg.s[1], 0, 0, 0);
+          if (msg.m && Game.mimic) Game.mimic.applyNet(msg.m[0], msg.m[1], msg.m[2], msg.m[3], msg.m[4]);
+          if (msg.r && Game.rescuers) msg.r.forEach((row, i) => {
+            if (Game.rescuers[i]) Game.rescuers[i].applyNet(row[0], row[1], row[2], row[3]);
+          });
         }
         break;
       }
@@ -662,17 +756,41 @@
         }
         break;
       }
+      case 'workshopPickup': {
+        if (!(isHost() || Game.solo) || !window.EscapeBackroomsWorkshop) break;
+        const item = EscapeBackroomsWorkshop.getActiveItem(msg.idx, msg.zn || 0);
+        const p = _latestPos(fromId);
+        const posOk = Game.solo || (p && p.zone === (msg.zn || 0) && item && dist2D(p.x, p.z, item.x, item.z) < 2.4);
+        if (item && !item.taken && posOk) broadcast({ t: 'workshopPicked', idx: msg.idx, zn: msg.zn || 0, id: fromId });
+        break;
+      }
+      case 'workshopPicked': {
+        if (!window.EscapeBackroomsWorkshop) break;
+        const item = EscapeBackroomsWorkshop.takeItem(msg.idx, msg.zn || 0);
+        if (item && msg.id === myId()) {
+          const info = EscapeBackroomsWorkshop.getItem(item.itemId);
+          const slot = Game.player.slots[1] === null ? 1 : (Game.player.slots[2] === null ? 2 : -1);
+          if (slot >= 0) {
+            Game.player.slots[slot] = { k: 'workshop', id: item.itemId, label: info.name || item.itemId, icon: info.icon || 'Mod' };
+            UI.msg(`拾取 ${info.name || item.itemId}（按 E 使用）`, null, 2600);
+            SFX.pickup();
+          }
+        }
+        break;
+      }
       case 'pickup': { // 房主校验（k: 0=杏仁水 1=电池）
         if (!(isHost() || Game.solo)) break;
-        const arr = msg.k === 1 ? Game.world && Game.world.batteries : Game.world && Game.world.bottles;
+        const world = Game.worlds && Game.worlds[msg.zn === undefined ? 0 : msg.zn];
+        const arr = msg.k === 1 ? world && world.batteries : world && world.bottles;
         const b = arr && arr[msg.idx];
         const p = _latestPos(fromId);
-        const posOk = Game.solo || (p && b && dist2D(p.x, p.z, b.x, b.z) < 2.4);
-        if (b && !b.taken && posOk) broadcast({ t: 'picked', idx: msg.idx, k: msg.k || 0, id: fromId });
+        const posOk = Game.solo || (p && p.zone === (msg.zn || 0) && b && dist2D(p.x, p.z, b.x, b.z) < 2.4);
+        if (b && !b.taken && posOk) broadcast({ t: 'picked', idx: msg.idx, k: msg.k || 0, zn: msg.zn || 0, id: fromId });
         break;
       }
       case 'picked': {
-        const arr = msg.k === 1 ? Game.world && Game.world.batteries : Game.world && Game.world.bottles;
+        const world = Game.worlds && Game.worlds[msg.zn === undefined ? 0 : msg.zn];
+        const arr = msg.k === 1 ? world && world.batteries : world && world.bottles;
         const b = arr && arr[msg.idx];
         if (b && !b.taken) {
           b.taken = true; b.g.visible = false;
@@ -694,7 +812,8 @@
             }
             if (msg.k !== 1) {
               Game.bottles++;
-              UI.setBottles(Game.bottles, Game.world.bottleTotal);
+              const total = Game.worlds ? Game.worlds.reduce((sum, world) => sum + (world.bottleTotal || 0), 0) : Game.world.bottleTotal;
+              UI.setBottles(Game.bottles, total);
             }
           }
         }
@@ -715,19 +834,20 @@
 
   // 房主校验用的最新位置
   function _latestPos(id) {
-    if (id === myId()) return { x: Game.player.pos.x, z: Game.player.pos.z };
+    if (id === myId()) return { x: Game.player.pos.x, z: Game.player.pos.z, zone: Game.zone };
     const i = Game.roster.findIndex((r) => r.id === id);
     const np = i >= 0 && Game._netPos.get(i);
     return np ? np : null;
   }
   function _posNearExit(id) {
     const p = _latestPos(id);
-    if (!p || !Game.world || !Game.world.exit) return false;
-    return dist2D(p.x, p.z, Game.world.exit.trigger.x, Game.world.exit.trigger.z) < 4;
+    const garage = Game.worlds && Game.worlds[1];
+    if (!p || p.zone !== 1 || !garage || !garage.exit) return false;
+    return dist2D(p.x, p.z, garage.exit.trigger.x, garage.exit.trigger.z) < 4;
   }
   function _distBetween(a, b) {
     const pa = _latestPos(a), pb = _latestPos(b);
-    if (!pa || !pb) return Infinity;
+    if (!pa || !pb || pa.zone !== pb.zone) return Infinity;
     return dist2D(pa.x, pa.z, pb.x, pb.z);
   }
   // ---------- 跳脸惊吓（被怪物杀死时；胆小模式关闭） ----------
@@ -778,7 +898,7 @@
       const z = P.pos.z - Math.cos(ang) * d;
       if (kind === 'shadow') {
         const cx = Game.world.toCX(x), cy = Game.world.toCY(z);
-        if (Game.maze.grid[cy][cx] === MZ.WALL) continue;
+        if (Game.world.maze.grid[cy][cx] === MZ.WALL) continue;
         const e = new Humanoid(gl.scene, Game.world);
         e.reset(x, z);
         e.yaw = Math.atan2(P.pos.x - x, P.pos.z - z);
@@ -830,7 +950,7 @@
   // ---------- 网络事件（房间层）----------
   // 所有消息类型统一注册到 Net（host 与 client 走同一 handleMsg 分支）
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'chat']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'workshopPickup', 'workshopPicked', 'roundEnd', 'hello', 'ready', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   // handleMsg 中补充的房间层消息
@@ -879,7 +999,7 @@
   // 覆盖统一注册使用的入口
   Game._handleMsg = handleMsg;
   ['roster', 'start', 'p', 'snap', 'escaped', 'catch', 'sanZero', 'died',
-    'becomeShadow', 'hit', 'pickup', 'picked', 'roundEnd', 'hello', 'ready', 'waitNext', 'chat']
+    'becomeShadow', 'hit', 'pickup', 'picked', 'workshopPickup', 'workshopPicked', 'roundEnd', 'hello', 'ready', 'waitNext', 'chat']
     .forEach((t) => Net.on(t, (msg, fromId) => handleMsg(msg, fromId)));
 
   Net.onPeer(function (ev) {

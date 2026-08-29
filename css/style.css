@@ -215,3 +215,6 @@ h3 { font-size: 15px; letter-spacing: 3px; color: #c9b458; margin: 14px 0 10px; 
         display: none !important;
     }
 }
+
+#workshopHud { display:flex; flex-direction:column; gap:6px; margin:8px auto; max-width:520px; pointer-events:none; }
+.workshop-widget { padding:5px 9px; border:1px solid rgba(201,180,88,.26); background:rgba(8,7,4,.42); color:#d8cfa8; font-size:12px; text-align:left; text-shadow:0 1px 3px #000; }

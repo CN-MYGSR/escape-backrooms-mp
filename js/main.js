@@ -2,7 +2,7 @@
  * 渲染：Canvas + requestAnimationFrame（规范红线），游戏循环与 UI 状态分离。
  * 鱼眼后期：常驻；理智越低越重；晕 3D 友好模式减半。
  */
-(function () {
+(async function () {
   const { clamp } = U;
 
   window.__errors = [];
@@ -89,6 +89,15 @@
   scene.add(Game.player.holder);
   scene.add(Game.player.flashlight, Game.player.flTarget, Game.player.glow);
   Game.player.flashlight.castShadow = Game.settings.shadows;
+
+  // 工坊 beforeStart 只在场景与公开 API 建立后放行正式启动。
+  if (window.VibeHubWorkshop && window.VibeHubWorkshop.beforeStart) {
+    await window.VibeHubWorkshop.beforeStart;
+  }
+  if (window.EscapeBackroomsWorkshop) {
+    EscapeBackroomsWorkshop.startGame();
+    EscapeBackroomsWorkshop.applyAppearance(Game.player.holder, { kind: 'local-player', firstPerson: true });
+  }
 
   // ---------- 主循环（渲染与逻辑分离，无轮询）----------
   let _last = performance.now(), _frames = 0, _fatal = false;
@@ -220,7 +229,7 @@ function initJoystick() {
       UI.msg(why, 'warn', 3000);
       return;
     }
-    Game.enterRoom(res.roomId, false);
+    if (!Game.enterRoom(res.roomId, false)) return;
     Net.send({ t: 'hello', name: Game.myName }); // 向房主报名
     UI.setNet('房间内', true);
   }
@@ -230,7 +239,7 @@ function initJoystick() {
     Game.settings.timid = $('optTimid').checked;
     Game.maxPlayers = parseInt($('optMax').value, 10) || 4;
     if (!Net.vibe) { // 离线：直接本地练习
-      Game.enterRoom('LOCAL', true);
+      if (!Game.enterRoom('LOCAL', true)) return;
       return;
     }
     if (!Net.online) {
@@ -240,7 +249,7 @@ function initJoystick() {
     UI.msg('正在创建房间…', null, 2500);
     const res = await Net.createRoom({ max: Game.maxPlayers, pass: $('optPass').value.trim() });
     if (!res) { UI.msg('创建失败，请重试或先本地练习。', 'warn', 3500); return; }
-    Game.enterRoom(res.roomId, false);
+    if (!Game.enterRoom(res.roomId, false)) return;
     UI.setNet('房间内（房主）', true);
   });
 
@@ -280,4 +289,9 @@ function initJoystick() {
     if ((Game.phase === 'playing' || Game.phase === 'countdown') && !Game.player._locked)
       Game.player.requestLock();
   });
+
+  if (window.VibeHubWorkshop && typeof window.VibeHubWorkshop.markGameReady === 'function') {
+    window.VibeHubWorkshop.markGameReady();
+    if (window.VibeHubWorkshop.afterStart) await window.VibeHubWorkshop.afterStart;
+  }
 })();
